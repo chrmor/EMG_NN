@@ -5,7 +5,7 @@
 
 ##SETTINGS
 
-nfold = 1 #number of folds to train
+nfold = 10 #number of folds to train
 lr=0.1 #learning rate
 
 batch_size = 32
