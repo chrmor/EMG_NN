@@ -1,11 +1,11 @@
 
 # coding: utf-8
 
-# In[126]:
+# In[3]:
 
 ##SETTINGS
 
-nfold = 1 #number of folds to train
+nfold = 10 #number of folds to train
 lr=0.1 #learning rate
 
 batch_size = 32
@@ -27,14 +27,14 @@ use_gonio=False
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d']
-model_select = [6] 
+model_select = [3,6] 
 
 #Early stop settings
-maxepoch = 1
-maxpatience = 1
+maxepoch = 100
+maxpatience = 5
 
 
-# In[127]:
+# In[4]:
 
 ##Import libraries
 import torch
@@ -56,18 +56,18 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 
-# In[128]:
+# In[5]:
 
 #CUDA
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
-# In[129]:
+# In[6]:
 
 torch.cuda.is_available()
 
 
-# In[130]:
+# In[7]:
 
 #Seeds
 torch.manual_seed(5)
@@ -75,7 +75,7 @@ random.seed(10)
 np.random.seed(20)
 
 
-# In[131]:
+# In[8]:
 
 #Prints header of beautifultable report for each fold
 def header(model_list,nmodel,nfold,traindataset,testdataset):
@@ -89,7 +89,7 @@ def header(model_list,nmodel,nfold,traindataset,testdataset):
     print('Testset fold'+str(i)+' shape: '+str(shape[0])+'x'+str((shape[1]+1))+'\n')
 
 
-# In[132]:
+# In[9]:
 
 #Prints actual beautifultable for each fold
 def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_dev):
@@ -103,7 +103,7 @@ def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_d
     print(table)
 
 
-# In[133]:
+# In[10]:
 
 #Saves best model state on disk for each fold
 def save_checkpoint (state, is_best, filename):
@@ -114,7 +114,7 @@ def save_checkpoint (state, is_best, filename):
         print ("=> Validation accuracy did not improve. "+'Epoch: '+str(state['epoch']))
 
 
-# In[134]:
+# In[11]:
 
 #Compute sklearn metrics: Recall, Precision, F1-score
 def pre_rec (loader):
@@ -134,7 +134,7 @@ def pre_rec (loader):
     return round(precision,3), round(recall,3), round(f1_score,3)
 
 
-# In[135]:
+# In[12]:
 
 #Calculates model accuracy. Predicted vs Correct.
 def accuracy (loader):
@@ -151,7 +151,7 @@ def accuracy (loader):
     return round((100 * correct / total),3)
 
 
-# In[136]:
+# In[13]:
 
 #Arrays to store metrics
 accs = np.empty([nfold,1])
@@ -180,7 +180,7 @@ def stds (accs,precs,recs,f1,accs_dev):
     return a,p,r,f,a_d
 
 
-# In[137]:
+# In[14]:
 
 #Shuffle
 def dev_shuffle (shuffle_train,shuffle_test,val_split,traindataset,testdataset):
@@ -201,7 +201,7 @@ def dev_shuffle (shuffle_train,shuffle_test,val_split,traindataset,testdataset):
     return tr_sampler,d_sampler,te_sampler
 
 
-# In[138]:
+# In[15]:
 
 #Loads and appends all folds all at once
 trainfolds = []
@@ -238,12 +238,12 @@ else:
 nmuscles=int((len(traindata.columns)-1)/20) #used for layer dimensions and stride CNNs
 
 
-# In[112]:
+# In[16]:
 
 trainfolds[0]
 
 
-# In[139]:
+# In[21]:
 
 #List of all models. Common activation function: ReLu. Common dp_ratio=0.5. Last activation function: sigmoid.
 
@@ -358,11 +358,12 @@ class Model6(nn.Module):
         conv_out_channels = 20 
         self.convs = nn.ModuleList([nn.Conv1d(in_channels=1, out_channels=conv_out_channels, kernel_size=k_size, stride=nmuscles) for k_size in self.FILTERS])
         #self.conv1 = nn.Conv1d(in_channels=1,out_channels=1,kernel_size=15,stride=5)
-        self.mp = nn.MaxPool1d(4)
+        self.mp = nn.MaxPool1d(2)
         #self.dropout = nn.Dropout(0.5)
-        self.fc1 = nn.Linear(120,512)
-        self.fc2 = nn.Linear(512,128)
-        self.fc3 = nn.Linear(128,1)
+        self.fc1 = nn.Linear(260,1024)
+        self.fc2 = nn.Linear(1024,512)
+        self.fc3 = nn.Linear(512,128)
+        self.fc4 = nn.Linear(128,1)
 
         
     def forward(self,x):
@@ -374,10 +375,11 @@ class Model6(nn.Module):
         x= x.view(32,1,-1).squeeze()
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        return F.sigmoid(self.fc3(x))
+        x = F.relu(self.fc3(x))
+        return F.sigmoid(self.fc4(x))
 
 
-# In[140]:
+# In[23]:
 
 #TEST DIMENSIONS
 def testdimensions():
@@ -411,11 +413,14 @@ def testdimensions():
     print("Do Fully connected 3")
     x = model.fc3(x)
     print("Out: " + str(x.shape))
+    print("Do Fully connected 4")
+    x = model.fc4(x)
+    print("Out: " + str(x.shape))
     
 #testdimensions()
 
 
-# In[141]:
+# In[ ]:
 
 fieldnames = ['Fold','Accuracy','Precision','Recall','F1_score','Stop_epoch','Accuracy_dev'] #coloumn names report FOLD CSV
 torch.backends.cudnn.benchmark = True
@@ -426,11 +431,12 @@ for k in model_select:
     avgtable = BeautifulTable()
     fieldnames1 = [model_lst[k],'Avg','Std_dev'] #column names report GLOBAL CSV
     folder = cwd+'/Report_'+str(model_lst[k])
+    if not os.path.exists(folder):
+        os.mkdir(folder)
+    
     logfilepath = folder + '/log.txt'
     logfile = open(logfilepath,"w") 
     
-    if not os.path.exists(folder):
-        os.mkdir(folder)
     with open(folder+'/Report_folds.csv','w') as f_fold, open(folder+'/Report_global.csv','w') as f_global:
         writer = csv.DictWriter(f_fold, fieldnames = fieldnames)
         writer1  = csv.DictWriter(f_global, fieldnames = fieldnames1)
@@ -517,10 +523,13 @@ for k in model_select:
                         print(msg)
                         logfile.write(msg + "\n")
                         running_loss = 0.0
-                        msg = 'Accuracy on dev set:' + str(accuracy(dev_loader))
-                        print(msg)
-                        logfile.write(msg + "\n")
+                        #msg = 'Accuracy on dev set:' + str(accuracy(dev_loader))
+                        #print(msg)
+                        #logfile.write(msg + "\n")        
                 accdev = (accuracy(dev_loader))
+                msg = 'Accuracy on dev set:' + str(accdev)
+                print(msg)
+                logfile.write(msg + "\n")        
                 is_best = bool(accdev > best_acc_dev)
                 best_acc_dev = (max(accdev, best_acc_dev))
                 save_checkpoint({
@@ -578,4 +587,9 @@ for k in model_select:
         
 logfile.close()
         
+
+
+# In[ ]:
+
+
 
