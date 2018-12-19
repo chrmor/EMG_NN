@@ -9,6 +9,6 @@ try:
 except:
     print('GPU not compatible with NVIDIA-SMI')
 
-    else:
-        print(deviceIDs[0])
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(deviceIDs[0])
+else:
+    print(deviceIDs[0])
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(deviceIDs[0])
