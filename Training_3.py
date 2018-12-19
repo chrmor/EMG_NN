@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[59]:
+# In[42]:
 
 ##SETTINGS
 
@@ -26,15 +26,15 @@ use_gonio=False
 #Select which models to run. Insert comma separated values into 'model_select' var.
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
-model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2']
-model_select = [1] 
+model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4']
+model_select = [8,9] 
 
 #Early stop settings
 maxepoch = 100
 maxpatience = 10
 
 
-# In[60]:
+# In[3]:
 
 ##Import libraries
 import torch
@@ -56,18 +56,18 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 
-# In[61]:
+# In[4]:
 
 #CUDA
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
-# In[62]:
+# In[5]:
 
 torch.cuda.is_available()
 
 
-# In[63]:
+# In[6]:
 
 #Seeds
 torch.manual_seed(5)
@@ -75,7 +75,7 @@ random.seed(10)
 np.random.seed(20)
 
 
-# In[64]:
+# In[7]:
 
 #Prints header of beautifultable report for each fold
 def header(model_list,nmodel,nfold,traindataset,testdataset):
@@ -89,7 +89,7 @@ def header(model_list,nmodel,nfold,traindataset,testdataset):
     print('Testset fold'+str(i)+' shape: '+str(shape[0])+'x'+str((shape[1]+1))+'\n')
 
 
-# In[65]:
+# In[8]:
 
 #Prints actual beautifultable for each fold
 def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_dev):
@@ -103,7 +103,7 @@ def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_d
     print(table)
 
 
-# In[66]:
+# In[9]:
 
 #Saves best model state on disk for each fold
 def save_checkpoint (state, is_best, filename, logfile):
@@ -118,7 +118,7 @@ def save_checkpoint (state, is_best, filename, logfile):
         logfile.write(msg + "\n")
 
 
-# In[67]:
+# In[10]:
 
 #Compute sklearn metrics: Recall, Precision, F1-score
 def pre_rec (loader):
@@ -138,7 +138,7 @@ def pre_rec (loader):
     return round(precision,3), round(recall,3), round(f1_score,3)
 
 
-# In[68]:
+# In[11]:
 
 #Calculates model accuracy. Predicted vs Correct.
 def accuracy (loader):
@@ -155,7 +155,7 @@ def accuracy (loader):
     return round((100 * correct / total),3)
 
 
-# In[69]:
+# In[12]:
 
 #Arrays to store metrics
 accs = np.empty([nfold,1])
@@ -184,7 +184,7 @@ def stds (accs,precs,recs,f1,accs_dev):
     return a,p,r,f,a_d
 
 
-# In[70]:
+# In[13]:
 
 #Shuffle
 def dev_shuffle (shuffle_train,shuffle_test,val_split,traindataset,testdataset):
@@ -250,7 +250,7 @@ nmuscles=int((len(traindata.columns)-1)/20) #used for layer dimensions and strid
 #trainfolds[0]
 
 
-# In[55]:
+# In[39]:
 
 #List of all models. Common activation function: ReLu. Common dp_ratio=0.5. Last activation function: sigmoid.
 
@@ -394,11 +394,41 @@ class Model7(nn.Module):
         #self.conv1 = nn.Conv1d(in_channels=1,out_channels=1,kernel_size=15,stride=5)
         self.mp = nn.MaxPool1d(2)
         #self.dropout = nn.Dropout(0.5)
-        self.fc1 = nn.Linear(260,1024)
+        self.fc1 = nn.Linear(160,1024)
         self.fc2 = nn.Linear(1024,512)
         self.fc3 = nn.Linear(512,128)
         self.fc4 = nn.Linear(128,1)
 
+    def test_dim(self,x):
+        for f in self.FILTERS:
+            print("Filter size: " + str(f))
+        print("Input:" + str(x.shape))
+        print("Features: " + str(nmuscles))
+        print("Do convnets")
+        x = [F.relu(conv(x)) for conv in self.convs]
+        for out in x:
+            print("Out: " + str(out.shape))
+        print("Do maxpool")
+        x = [self.mp(i) for i in x]   
+        for i in x:
+            print("Out: " + str(i.shape))
+        print("Do concat")    
+        x = torch.cat(x,2)
+        x = x.view(32,1,-1).squeeze()
+        print("Out: " + str(x.shape))
+
+        print("Do Fully connected 1")
+        x = self.fc1(x)
+        print("Out: " + str(x.shape))
+        print("Do Fully connected 2")
+        x = self.fc2(x)
+        print("Out: " + str(x.shape))
+        print("Do Fully connected 3")
+        x = self.fc3(x)
+        print("Out: " + str(x.shape))
+        print("Do Fully connected 4")
+        x = self.fc4(x)
+        print("Out: " + str(x.shape))
         
     def forward(self,x):
         x = x.view(batch_size,1,-1)
@@ -420,14 +450,12 @@ class Model8(nn.Module):
         conv_out_channels = 10 
         self.convs = nn.ModuleList([nn.Conv1d(in_channels=1, out_channels=conv_out_channels, kernel_size=k_size, stride=nmuscles) for k_size in self.FILTERS])
         #self.conv1 = nn.Conv1d(in_channels=1,out_channels=1,kernel_size=15,stride=5)
-        self.mp = nn.MaxPool1d(2)
+        #self.mp = nn.MaxPool1d(2)
         self.FILTERS_2=[2,3,5]
         self.convs_2 = nn.ModuleList([nn.Conv1d(in_channels=10, out_channels=conv_out_channels*2, kernel_size=k_size, stride=nmuscles) for k_size in self.FILTERS_2])
         #self.dropout = nn.Dropout(0.5)
-        self.fc1 = nn.Linear(240,1024)
-        self.fc2 = nn.Linear(1024,512)
-        self.fc3 = nn.Linear(512,128)
-        self.fc4 = nn.Linear(128,1)
+        self.fc1 = nn.Linear(240,32)
+        self.fc2 = nn.Linear(32,1)
 
     def test_dim(self,x):
         for f in self.FILTERS:
@@ -457,30 +485,71 @@ class Model8(nn.Module):
         print("Do Fully connected 2")
         x = self.fc2(x)
         print("Out: " + str(x.shape))
-        print("Do Fully connected 3")
-        x = self.fc3(x)
+        
+    def forward(self,x):
+        x = x.view(batch_size,1,-1)
+        x = [F.relu(conv(x)) for conv in self.convs]
+        x = [F.relu(conv(i)) for i in x for conv in self.convs_2]
+        x = torch.cat(x,2)
+        x = x.view(32,1,-1).squeeze()
+        x = F.relu(self.fc1(x))
+        return F.sigmoid(self.fc2(x))
+
+#1D Convnet -> Stride=nmuscles.
+class Model9(nn.Module):
+    def __init__(self,**kwargs):
+        super(Model9,self).__init__()
+        self.FILTERS=[3*nmuscles,5*nmuscles,10*nmuscles]
+        conv_out_channels = 10 
+        self.convs = nn.ModuleList([nn.Conv1d(in_channels=1, out_channels=conv_out_channels, kernel_size=k_size, stride=nmuscles) for k_size in self.FILTERS])
+        #self.conv1 = nn.Conv1d(in_channels=1,out_channels=1,kernel_size=15,stride=5)
+        #self.mp = nn.MaxPool1d(2)
+        #self.dropout = nn.Dropout(0.5)
+        self.fc1 = nn.Linear(330,32)
+        self.fc2 = nn.Linear(32,1)
+
+    def test_dim(self,x):
+        for f in self.FILTERS:
+            print("Filter size: " + str(f))
+        print("Input:" + str(x.shape))
+        print("Features: " + str(nmuscles))
+        print("Do convnets")
+        x = [F.relu(conv(x)) for conv in self.convs]
+        for out in x:
+            print("Out: " + str(out.shape))
+        #print("Do maxpool")
+        #x = [model.mp(i) for i in x]   
+        #for i in x:
+            #print("Out: " + str(i.shape))
+        print("Do concat")    
+        x = torch.cat(x,2)
+        x = x.view(32,1,-1).squeeze()
         print("Out: " + str(x.shape))
-        print("Do Fully connected 4")
-        x = self.fc4(x)
+
+        print("Do Fully connected 1")
+        x = self.fc1(x)
+        print("Out: " + str(x.shape))
+        print("Do Fully connected 2")
+        x = self.fc2(x)
         print("Out: " + str(x.shape))
         
     def forward(self,x):
         x = x.view(batch_size,1,-1)
         x = [F.relu(conv(x)) for conv in self.convs]
-        x = [self.mp(i) for i in x]
+        x = [F.relu(conv(i)) for i in x for conv in self.convs_2]
         x = torch.cat(x,2)
-        x= x.view(32,1,-1).squeeze()
+        x = x.view(32,1,-1).squeeze()
         x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        return F.sigmoid(self.fc4(x))
+        return F.sigmoid(self.fc2(x))
+    
+    
 
 
-# In[56]:
+# In[40]:
 
 #TEST DIMENSIONS
 def testdimensions():
-    model = Model8()
+    model = Model9()
     x = torch.randn(32,1,160)
     model.test_dim(x)
  
@@ -565,7 +634,11 @@ for k in model_select:
                 model=Model6().to(device)
             if k==7:
                 model=Model7().to(device)
-            
+            if k==8:
+                model=Model8().to(device)
+            if k==9:
+                model=Model9().to(device)
+                
             criterion = nn.BCELoss(size_average=True)
             optimizer = torch.optim.SGD(model.parameters(), lr)    
             msg = 'Accuracy on test set before training: '+str(accuracy(test_loader))+'\n'
