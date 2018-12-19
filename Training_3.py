@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[47]:
+# In[59]:
 
 ##SETTINGS
 
@@ -27,14 +27,14 @@ use_gonio=False
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2']
-model_select = [3,6] 
+model_select = [1] 
 
 #Early stop settings
 maxepoch = 100
 maxpatience = 10
 
 
-# In[38]:
+# In[60]:
 
 ##Import libraries
 import torch
@@ -56,18 +56,18 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 
-# In[39]:
+# In[61]:
 
 #CUDA
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
-# In[40]:
+# In[62]:
 
 torch.cuda.is_available()
 
 
-# In[41]:
+# In[63]:
 
 #Seeds
 torch.manual_seed(5)
@@ -75,7 +75,7 @@ random.seed(10)
 np.random.seed(20)
 
 
-# In[42]:
+# In[64]:
 
 #Prints header of beautifultable report for each fold
 def header(model_list,nmodel,nfold,traindataset,testdataset):
@@ -89,7 +89,7 @@ def header(model_list,nmodel,nfold,traindataset,testdataset):
     print('Testset fold'+str(i)+' shape: '+str(shape[0])+'x'+str((shape[1]+1))+'\n')
 
 
-# In[43]:
+# In[65]:
 
 #Prints actual beautifultable for each fold
 def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_dev):
@@ -103,18 +103,22 @@ def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_d
     print(table)
 
 
-# In[48]:
+# In[66]:
 
 #Saves best model state on disk for each fold
-def save_checkpoint (state, is_best, filename):
+def save_checkpoint (state, is_best, filename, logfile):
     if is_best:
-        print ("=> Saving a new best. "+'Epoch: '+str(state['epoch']))
+        msg = "=> Saving a new best. "+'Epoch: '+str(state['epoch'])
+        print (msg)
+        logfile.write(msg + "\n")
         torch.save(state, filename)  
     else:
-        print ("=> Validation accuracy did not improve. "+'Epoch: '+str(state['epoch']))
+        msg = "=> Validation accuracy did not improve. "+'Epoch: '+str(state['epoch'])
+        print (msg)
+        logfile.write(msg + "\n")
 
 
-# In[49]:
+# In[67]:
 
 #Compute sklearn metrics: Recall, Precision, F1-score
 def pre_rec (loader):
@@ -134,7 +138,7 @@ def pre_rec (loader):
     return round(precision,3), round(recall,3), round(f1_score,3)
 
 
-# In[50]:
+# In[68]:
 
 #Calculates model accuracy. Predicted vs Correct.
 def accuracy (loader):
@@ -151,7 +155,7 @@ def accuracy (loader):
     return round((100 * correct / total),3)
 
 
-# In[51]:
+# In[69]:
 
 #Arrays to store metrics
 accs = np.empty([nfold,1])
@@ -180,7 +184,7 @@ def stds (accs,precs,recs,f1,accs_dev):
     return a,p,r,f,a_d
 
 
-# In[52]:
+# In[70]:
 
 #Shuffle
 def dev_shuffle (shuffle_train,shuffle_test,val_split,traindataset,testdataset):
@@ -201,7 +205,7 @@ def dev_shuffle (shuffle_train,shuffle_test,val_split,traindataset,testdataset):
     return tr_sampler,d_sampler,te_sampler
 
 
-# In[53]:
+# In[71]:
 
 #Loads and appends all folds all at once
 trainfolds = []
@@ -216,18 +220,21 @@ for i in range (8,200,nmuscles):
 col_only = np.append(col_del,200)
 if del_gonio & (not use_gonio): #delete gonio
     for j in range(1,nfold+1):
+        print("Loading fold " + str(j))
         traindata = pd.read_table(os.path.join(cwd,'TrainFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32,usecols=[i for i in cols if i not in col_del.astype(int)])
         testdata = pd.read_table(os.path.join(cwd,'TestFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32, usecols=[i for i in cols if i not in col_del.astype(int)])
         trainfolds.append(traindata)
         testfolds.append(testdata) 
 elif use_gonio & (not del_gonio): #only gonio
     for j in range(1,nfold+1):
+        print("Loading fold " + str(j))
         traindata = pd.read_table(os.path.join(cwd,'TrainFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32,usecols=[i for i in cols if i in col_only.astype(int)])
         testdata = pd.read_table(os.path.join(cwd,'TestFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32, usecols=[i for i in cols if i in col_only.astype(int)])
         trainfolds.append(traindata)
         testfolds.append(testdata) 
 elif (not use_gonio) & (not del_gonio): 
     for j in range(1,nfold+1):
+        print("Loading fold " + str(j))
         traindata = pd.read_csv(os.path.join(cwd,'TrainFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32)
         testdata = pd.read_csv(os.path.join(cwd,'TestFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32)
         trainfolds.append(traindata)
@@ -580,7 +587,7 @@ for k in model_select:
                     optimizer.step()
                     running_loss += loss.item()
                     #print accuracy ever l mini-batches
-                    if l % 1000 == 999:
+                    if l % 2000 == 1999:
                         msg = '[%d, %5d] loss: %.3f' %(epoch + 1, l + 1, running_loss / 999)
                         print(msg)
                         logfile.write(msg + "\n")
@@ -598,7 +605,7 @@ for k in model_select:
                     'epoch': epoch + 1,
                     'state_dict': model.state_dict(),
                     'best_acc_dev': best_acc_dev
-                }, is_best,os.path.join(folder,'F'+str(i)+'best.pth.tar'))
+                }, is_best,os.path.join(folder,'F'+str(i)+'best.pth.tar'), logfile)
                 if is_best:
                     patience=0
                 else:
