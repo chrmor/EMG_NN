@@ -31,8 +31,12 @@ model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1
 model_select = [8,9] 
 =======
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2']
+<<<<<<< HEAD
 model_select = [0] 
 >>>>>>> b5050e80f0a75f8e5a8bc9d8f5954fa59b7dbd9c
+=======
+model_select = [1] 
+>>>>>>> fe4587a716648655c219c0e3aa870619720d754c
 
 #Early stop settings
 maxepoch = 100
