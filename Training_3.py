@@ -611,6 +611,7 @@ for k in model_select:
                 else:
                     patience = patience+1
                 epoch = epoch+1
+                logfile.flush()
             state = torch.load(os.path.join(folder,'F'+str(i)+'best.pth.tar'))
             stop_epoch = state['epoch']
             model.load_state_dict(state['state_dict'])
