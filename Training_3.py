@@ -26,8 +26,13 @@ use_gonio=False
 #Select which models to run. Insert comma separated values into 'model_select' var.
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
+<<<<<<< HEAD
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4']
 model_select = [8,9] 
+=======
+model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2']
+model_select = [0] 
+>>>>>>> b5050e80f0a75f8e5a8bc9d8f5954fa59b7dbd9c
 
 #Early stop settings
 maxepoch = 100
