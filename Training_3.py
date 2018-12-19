@@ -628,6 +628,7 @@ for k in model_select:
             table.append_row([i,acctest,precision,recall,f1_score,stop_epoch,accuracy_dev])
             print(table)
             print('----------------------------------------------------------------------')
+            logfile.write(str(table) + "\n----------------------------------------------------------------------\n")
             t1 = time.time()
             times[i-1] = int(t1-t0)
         duration = str(datetime.timedelta(seconds=np.sum(times)))
