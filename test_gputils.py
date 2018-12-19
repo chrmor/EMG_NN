@@ -1,5 +1,6 @@
 
 import GPUtil
+import os
 
 # Get the first available GPU
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
