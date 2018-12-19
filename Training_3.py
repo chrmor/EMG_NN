@@ -27,7 +27,7 @@ use_gonio=False
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2']
-model_select = [0] 
+model_select = [1] 
 
 #Early stop settings
 maxepoch = 100
