@@ -1,15 +1,16 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[59]:
 
 ##SETTINGS
 
-nfold = 10 #number of folds to train
+nfold = 1 #number of folds to train
 lr=0.1 #learning rate
 
 batch_size = 32
 val_split = .1 #trainset percentage allocated for devset
+test_val_split = .1 #trainset percentage allocated for test_val set (i.e. the test set of known patients)
 spw=20 #samples per window
 nmuscles=10 #initial number of muscles acquired
 
@@ -27,16 +28,16 @@ use_gonio=False
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4']
-model_select = [9] 
+model_select = [0] 
 
 #Early stop settings
-maxepoch = 100
+maxepoch = 10
 maxpatience = 10
 
 use_gputil = True
 
 
-# In[2]:
+# In[40]:
 
 ##Import libraries
 import torch
@@ -58,11 +59,11 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 
-# In[4]:
+# In[58]:
 
 #CUDA
 
-if use_gputil:
+if use_gputil and torch.cuda.is_available():
     import GPUtil
 
     # Get the first available GPU
@@ -74,18 +75,19 @@ if use_gputil:
         print('GPU not compatible with NVIDIA-SMI')
 
     else:
-        device = 'cuda:' + str(deviceIDs[0])
+        device_id = 'cuda:' + str(deviceIDs[0])
+        device = torch.device(device_id)
         os.environ["CUDA_VISIBLE_DEVICES"] = str(deviceIDs[0])
 else:
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
-# In[5]:
+# In[61]:
 
-torch.cuda.is_available()
+#torch.cuda.is_available()
 
 
-# In[6]:
+# In[43]:
 
 #Seeds
 torch.manual_seed(5)
@@ -93,7 +95,7 @@ random.seed(10)
 np.random.seed(20)
 
 
-# In[7]:
+# In[44]:
 
 #Prints header of beautifultable report for each fold
 def header(model_list,nmodel,nfold,traindataset,testdataset):
@@ -107,7 +109,7 @@ def header(model_list,nmodel,nfold,traindataset,testdataset):
     print('Testset fold'+str(i)+' shape: '+str(shape[0])+'x'+str((shape[1]+1))+'\n')
 
 
-# In[8]:
+# In[45]:
 
 #Prints actual beautifultable for each fold
 def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_dev):
@@ -121,7 +123,7 @@ def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_d
     print(table)
 
 
-# In[9]:
+# In[46]:
 
 #Saves best model state on disk for each fold
 def save_checkpoint (state, is_best, filename, logfile):
@@ -136,7 +138,7 @@ def save_checkpoint (state, is_best, filename, logfile):
         logfile.write(msg + "\n")
 
 
-# In[10]:
+# In[47]:
 
 #Compute sklearn metrics: Recall, Precision, F1-score
 def pre_rec (loader):
@@ -156,7 +158,7 @@ def pre_rec (loader):
     return round(precision,3), round(recall,3), round(f1_score,3)
 
 
-# In[11]:
+# In[48]:
 
 #Calculates model accuracy. Predicted vs Correct.
 def accuracy (loader):
@@ -173,10 +175,11 @@ def accuracy (loader):
     return round((100 * correct / total),3)
 
 
-# In[12]:
+# In[49]:
 
 #Arrays to store metrics
 accs = np.empty([nfold,1])
+accs_test_val = np.empty([nfold,1])
 precisions = np.empty([nfold,1])
 recalls = np.empty([nfold,1])
 f1_scores = np.empty([nfold,1])
@@ -202,7 +205,7 @@ def stds (accs,precs,recs,f1,accs_dev):
     return a,p,r,f,a_d
 
 
-# In[13]:
+# In[50]:
 
 #Shuffle
 def dev_shuffle (shuffle_train,shuffle_test,val_split,traindataset,testdataset):
@@ -222,8 +225,51 @@ def dev_shuffle (shuffle_train,shuffle_test,val_split,traindataset,testdataset):
     te_sampler = SubsetRandomSampler(test_indices)
     return tr_sampler,d_sampler,te_sampler
 
+def data_split (shuffle_train,shuffle_test,val_split,test_val_split,traindataset,testdataset):
+    train_size = len(traindataset)
+    test_size = len(testdataset)
+    train_indices = list(range(train_size))
+    test_indices = list(range(test_size))
+    test_val_split = int(np.floor(test_val_split * train_size)) 
+    dev_split = int(np.floor(val_split * (train_size-test_val_split) + test_val_split))
+    if shuffle_train:
+        np.random.shuffle(train_indices)
+    if shuffle_test:
+        np.random.shuffle(test_indices) 
+    train_indices, dev_indices, test_val_indices = train_indices[dev_split:], train_indices[test_val_split:dev_split], train_indices[:test_val_split]
+    # Samplers
+    tr_sampler = SubsetRandomSampler(train_indices)
+    d_sampler = SubsetRandomSampler(dev_indices)
+    tv_sampler = SubsetRandomSampler(test_val_indices)                
+    te_sampler = SubsetRandomSampler(test_indices)
+    return tr_sampler,d_sampler,tv_sampler,te_sampler
 
-# In[71]:
+
+# In[51]:
+
+'''
+test_val_split = 0.1
+train_size = 100
+val_split = 0.1
+test_val_split = int(np.floor(test_val_split * train_size)) 
+dev_split = int(np.floor(val_split * (train_size-test_val_split) + test_val_split))
+print(str(test_val_split) + " " + str(dev_split))
+
+train_indices = []
+for i in range(0,100):
+    train_indices.append(i + 1)
+
+print(train_indices)
+    
+train_indices, dev_indices, test_val_indices = train_indices[dev_split:], train_indices[test_val_split:dev_split], train_indices[:test_val_split]
+
+print("Train: " + str(train_indices))
+print("Test Val: " + str(test_val_indices))
+print("Dev: " + str(dev_indices))
+'''
+
+
+# In[52]:
 
 #Loads and appends all folds all at once
 trainfolds = []
@@ -263,12 +309,12 @@ else:
 nmuscles=int((len(traindata.columns)-1)/20) #used for layer dimensions and stride CNNs
 
 
-# In[54]:
+# In[53]:
 
 #trainfolds[0]
 
 
-# In[39]:
+# In[54]:
 
 #List of all models. Common activation function: ReLu. Common dp_ratio=0.5. Last activation function: sigmoid.
 
@@ -563,7 +609,7 @@ class Model9(nn.Module):
     
 
 
-# In[40]:
+# In[55]:
 
 #TEST DIMENSIONS
 def testdimensions():
@@ -574,9 +620,9 @@ def testdimensions():
 #testdimensions()
 
 
-# In[57]:
+# In[60]:
 
-fieldnames = ['Fold','Accuracy','Precision','Recall','F1_score','Stop_epoch','Accuracy_dev'] #coloumn names report FOLD CSV
+fieldnames = ['Fold','Acc_test_val', 'Accuracy','Precision','Recall','F1_score','Stop_epoch','Accuracy_dev'] #coloumn names report FOLD CSV
 torch.backends.cudnn.benchmark = True
 
 #TRAINING LOOP
@@ -627,10 +673,13 @@ for k in model_select:
 
             header(model_lst,k,i,traindataset,testdataset)
 
-            train_sampler,dev_sampler,test_sampler=dev_shuffle(shuffle_train,shuffle_test,val_split,traindataset,testdataset)
+            #train_sampler,dev_sampler,test_sampler=dev_shuffle(shuffle_train,shuffle_test,val_split,traindataset,testdataset)
+            train_sampler,dev_sampler,test_val_sampler,test_sampler=data_split(shuffle_train,shuffle_test,val_split,test_val_split,traindataset,testdataset)
             #loaders
             train_loader = torch.utils.data.DataLoader(traindataset, batch_size=batch_size, 
                                                        sampler=train_sampler,drop_last=True)
+            test_val_loader = torch.utils.data.DataLoader(traindataset, batch_size=batch_size,
+                                                            sampler=test_val_sampler,drop_last=True)
             dev_loader = torch.utils.data.DataLoader(traindataset, batch_size=batch_size, 
                                                        sampler=dev_sampler,drop_last=True)
             test_loader = torch.utils.data.DataLoader(testdataset, batch_size=batch_size,
@@ -709,15 +758,17 @@ for k in model_select:
             accuracy_dev = state['best_acc_dev']
             model.eval()
             acctest = (accuracy(test_loader))
+            acctest_val = (accuracy(test_val_loader))
             accs[i-1] = acctest
+            accs_test_val[i-1] = acctest_val
             precision,recall,f1_score = pre_rec(test_loader)
             precisions[i-1] = precision
             recalls[i-1] = recall
             f1_scores[i-1] = f1_score
             accs_dev[i-1] = accuracy_dev
-            writer.writerow({'Fold': i, 'Accuracy': acctest,'Precision': precision,'Recall': recall,'F1_score': f1_score,'Stop_epoch': stop_epoch,'Accuracy_dev': accuracy_dev})
+            writer.writerow({'Fold': i,'Acc_test_val': acctest_val, 'Accuracy': acctest,'Precision': precision,'Recall': recall,'F1_score': f1_score,'Stop_epoch': stop_epoch,'Accuracy_dev': accuracy_dev})
             table.column_headers = fieldnames
-            table.append_row([i,acctest,precision,recall,f1_score,stop_epoch,accuracy_dev])
+            table.append_row([i,acctest_val,acctest,precision,recall,f1_score,stop_epoch,accuracy_dev])
             print(table)
             print('----------------------------------------------------------------------')
             logfile.write(str(table) + "\n----------------------------------------------------------------------\n")
@@ -726,9 +777,12 @@ for k in model_select:
         duration = str(datetime.timedelta(seconds=np.sum(times)))
         writer.writerow({})
         writer.writerow({'Fold': 'Elapsed time: '+duration})
+        avg_acc_test_val = round(np.average(accs_test_val),3)
+        std_acc_test_val = round(np.std(accs_test_val),3)
         avg_a,avg_p,avg_r,avg_f,avg_a_d=averages(accs,precisions,recalls,f1_scores,accs_dev)
         std_a,std_p,std_r,std_f,std_a_d=stds(accs,precisions,recalls,f1_scores,accs_dev)
-        writer1.writerow({model_lst[k]: 'Accuracy','Avg': avg_a,'Std_dev': std_a})
+        writer1.writerow({model_lst[k]: 'Accuracy','Avg': avg_acc_test_val,'Std_dev': std_acc_test_val})
+        writer1.writerow({model_lst[k]: 'Accuracy test val','Avg': avg_a,'Std_dev': std_a})
         writer1.writerow({model_lst[k]: 'Precision','Avg': avg_p,'Std_dev': std_p})
         writer1.writerow({model_lst[k]: 'Recall','Avg': avg_r,'Std_dev': std_r})
         writer1.writerow({model_lst[k]: 'F1_score','Avg': avg_f,'Std_dev': std_f})
@@ -737,6 +791,7 @@ for k in model_select:
         writer1.writerow({model_lst[k]: 'Elapsed time: '+duration})
         avgtable.column_headers = fieldnames1
         avgtable.append_row(['Accuracy',avg_a,std_a])
+        avgtable.append_row(['Accuracy test val',avg_acc_test_val,std_acc_test_val])
         avgtable.append_row(['Precision',avg_p,std_p])
         avgtable.append_row(['Recall',avg_r,std_r])
         avgtable.append_row(['F1_score',avg_a,std_f])
