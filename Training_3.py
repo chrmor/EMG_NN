@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[42]:
+# In[1]:
 
 ##SETTINGS
 
@@ -27,14 +27,16 @@ use_gonio=False
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4']
-model_select = [8,9] 
+model_select = [9] 
 
 #Early stop settings
 maxepoch = 100
 maxpatience = 10
 
+use_gputil = True
 
-# In[3]:
+
+# In[2]:
 
 ##Import libraries
 import torch
@@ -59,7 +61,23 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 # In[4]:
 
 #CUDA
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+if use_gputil:
+    import GPUtil
+
+    # Get the first available GPU
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    try:
+        deviceIDs = GPUtil.getAvailable(order='memory', limit=1, maxLoad=100, maxMemory=20)  # return a list of available gpus
+
+    except:
+        print('GPU not compatible with NVIDIA-SMI')
+
+    else:
+        device = 'cuda:' + str(deviceIDs[0])
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(deviceIDs[0])
+else:
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 # In[5]:
