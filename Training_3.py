@@ -818,7 +818,7 @@ if use_gputil and torch.cuda.is_available():
         os.environ["CUDA_VISIBLE_DEVICES"] = str(deviceIDs[0])
 
 if use_cuda and not use_gputil and cuda_device!=None and torch.cuda.is_available():
-    with torch.cuda.device(params['cuda_device']):
+    with torch.cuda.device(cuda_device):
         train_test()
 else:
     train_test()
