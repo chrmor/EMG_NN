@@ -5,7 +5,7 @@
 
 ##SETTINGS
 
-nfold = 1 #number of folds to train
+nfold = 10 #number of folds to train
 lr=0.1 #learning rate
 
 batch_size = 32
@@ -617,7 +617,7 @@ def testdimensions():
     x = torch.randn(32,1,160)
     model.test_dim(x)
  
-testdimensions()
+#testdimensions()
 
 
 # In[273]:
