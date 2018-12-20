@@ -5,7 +5,7 @@
 
 ##SETTINGS
 
-nfold = 10 #number of folds to train
+nfold = 1 #number of folds to train
 lr=0.1 #learning rate
 
 batch_size = 32
@@ -28,11 +28,11 @@ use_gonio=False
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4']
-model_select = [3] 
+model_select = [0] 
 
 #Early stop settings
-maxepoch = 150
-maxpatience = 15
+maxepoch = 1
+maxpatience = 1
 
 use_gputil = False
 
@@ -57,29 +57,6 @@ from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
-
-
-# In[101]:
-
-#CUDA
-
-if use_gputil and torch.cuda.is_available():
-    import GPUtil
-
-    # Get the first available GPU
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    try:
-        deviceIDs = GPUtil.getAvailable(order='memory', limit=1, maxLoad=100, maxMemory=20)  # return a list of available gpus
-
-    except:
-        print('GPU not compatible with NVIDIA-SMI')
-
-    else:
-        device_id = 'cuda:' + str(deviceIDs[0])
-        device = torch.device(device_id)
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(deviceIDs[0])
-else:
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 
 # In[102]:
@@ -269,7 +246,7 @@ print("Dev: " + str(dev_indices))
 '''
 
 
-# In[ ]:
+# In[112]:
 
 #Loads and appends all folds all at once
 trainfolds = []
@@ -309,12 +286,12 @@ else:
 nmuscles=int((len(traindata.columns)-1)/20) #used for layer dimensions and stride CNNs
 
 
-# In[95]:
+# In[113]:
 
 #trainfolds[0]
 
 
-# In[96]:
+# In[114]:
 
 #List of all models. Common activation function: ReLu. Common dp_ratio=0.5. Last activation function: sigmoid.
 
@@ -609,7 +586,7 @@ class Model9(nn.Module):
     
 
 
-# In[97]:
+# In[115]:
 
 #TEST DIMENSIONS
 def testdimensions():
@@ -620,10 +597,30 @@ def testdimensions():
 #testdimensions()
 
 
-# In[98]:
+# In[ ]:
 
 fieldnames = ['Fold','Acc_test_val', 'Accuracy','Precision','Recall','F1_score','Stop_epoch','Accuracy_dev'] #coloumn names report FOLD CSV
 torch.backends.cudnn.benchmark = True
+
+#CUDA
+
+if use_gputil and torch.cuda.is_available():
+    import GPUtil
+
+    # Get the first available GPU
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    try:
+        deviceIDs = GPUtil.getAvailable(order='memory', limit=1, maxLoad=100, maxMemory=20)  # return a list of available gpus
+
+    except:
+        print('GPU not compatible with NVIDIA-SMI')
+
+    else:
+        device_id = 'cuda:' + str(deviceIDs[0])
+        device = torch.device(device_id)
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(deviceIDs[0])
+else:
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 #TRAINING LOOP
 for k in model_select:
@@ -781,8 +778,8 @@ for k in model_select:
         std_acc_test_val = round(np.std(accs_test_val),3)
         avg_a,avg_p,avg_r,avg_f,avg_a_d=averages(accs,precisions,recalls,f1_scores,accs_dev)
         std_a,std_p,std_r,std_f,std_a_d=stds(accs,precisions,recalls,f1_scores,accs_dev)
-        writer1.writerow({model_lst[k]: 'Accuracy','Avg': avg_acc_test_val,'Std_dev': std_acc_test_val})
-        writer1.writerow({model_lst[k]: 'Accuracy test val','Avg': avg_a,'Std_dev': std_a})
+        writer1.writerow({model_lst[k]: 'Accuracy','Avg': avg_a,'Std_dev': std_acc_test_val})
+        writer1.writerow({model_lst[k]: 'Accuracy test val','Avg': avg_acc_test_val,'Std_dev': std_a})
         writer1.writerow({model_lst[k]: 'Precision','Avg': avg_p,'Std_dev': std_p})
         writer1.writerow({model_lst[k]: 'Recall','Avg': avg_r,'Std_dev': std_r})
         writer1.writerow({model_lst[k]: 'F1_score','Avg': avg_f,'Std_dev': std_f})
