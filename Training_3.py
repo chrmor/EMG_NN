@@ -1,11 +1,11 @@
 
 # coding: utf-8
 
-# In[117]:
+# In[256]:
 
 ##SETTINGS
 
-nfold = 10 #number of folds to train
+nfold = 1 #number of folds to train
 lr=0.1 #learning rate
 
 batch_size = 32
@@ -28,7 +28,7 @@ use_gonio=False
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4']
-model_select = [3] 
+model_select = [9] 
 
 #Early stop settings
 maxepoch = 150
@@ -39,7 +39,7 @@ use_gputil = True
 cuda_device = None
 
 
-# In[ ]:
+# In[257]:
 
 #CUDA
 
@@ -60,7 +60,7 @@ if use_gputil and torch.cuda.is_available():
     
 
 
-# In[118]:
+# In[258]:
 
 ##Import libraries
 import torch
@@ -82,12 +82,12 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 
-# In[119]:
+# In[259]:
 
 #torch.cuda.is_available()
 
 
-# In[120]:
+# In[260]:
 
 #Seeds
 torch.manual_seed(5)
@@ -95,7 +95,7 @@ random.seed(10)
 np.random.seed(20)
 
 
-# In[121]:
+# In[261]:
 
 #Prints header of beautifultable report for each fold
 def header(model_list,nmodel,nfold,traindataset,testdataset):
@@ -109,7 +109,7 @@ def header(model_list,nmodel,nfold,traindataset,testdataset):
     print('Testset fold'+str(i)+' shape: '+str(shape[0])+'x'+str((shape[1]+1))+'\n')
 
 
-# In[122]:
+# In[262]:
 
 #Prints actual beautifultable for each fold
 def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_dev):
@@ -123,7 +123,7 @@ def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_d
     print(table)
 
 
-# In[123]:
+# In[263]:
 
 #Saves best model state on disk for each fold
 def save_checkpoint (state, is_best, filename, logfile):
@@ -138,7 +138,7 @@ def save_checkpoint (state, is_best, filename, logfile):
         logfile.write(msg + "\n")
 
 
-# In[124]:
+# In[264]:
 
 #Compute sklearn metrics: Recall, Precision, F1-score
 def pre_rec (loader, model):
@@ -158,7 +158,7 @@ def pre_rec (loader, model):
     return round(precision,3), round(recall,3), round(f1_score,3)
 
 
-# In[125]:
+# In[265]:
 
 #Calculates model accuracy. Predicted vs Correct.
 def accuracy (loader, model):
@@ -175,7 +175,7 @@ def accuracy (loader, model):
     return round((100 * correct / total),3)
 
 
-# In[126]:
+# In[266]:
 
 #Arrays to store metrics
 accs = np.empty([nfold,1])
@@ -205,7 +205,7 @@ def stds (accs,precs,recs,f1,accs_dev):
     return a,p,r,f,a_d
 
 
-# In[127]:
+# In[267]:
 
 #Shuffle
 def dev_shuffle (shuffle_train,shuffle_test,val_split,traindataset,testdataset):
@@ -245,7 +245,7 @@ def data_split (shuffle_train,shuffle_test,val_split,test_val_split,traindataset
     return tr_sampler,d_sampler,tv_sampler,te_sampler
 
 
-# In[128]:
+# In[268]:
 
 '''
 test_val_split = 0.1
@@ -269,7 +269,7 @@ print("Dev: " + str(dev_indices))
 '''
 
 
-# In[129]:
+# In[269]:
 
 #Loads and appends all folds all at once
 trainfolds = []
@@ -309,12 +309,12 @@ else:
 nmuscles=int((len(traindata.columns)-1)/20) #used for layer dimensions and stride CNNs
 
 
-# In[130]:
+# In[270]:
 
 #trainfolds[0]
 
 
-# In[131]:
+# In[271]:
 
 #List of all models. Common activation function: ReLu. Common dp_ratio=0.5. Last activation function: sigmoid.
 
@@ -563,13 +563,13 @@ class Model8(nn.Module):
 class Model9(nn.Module):
     def __init__(self,**kwargs):
         super(Model9,self).__init__()
-        self.FILTERS=[3*nmuscles,5*nmuscles,10*nmuscles]
-        conv_out_channels = 10 
+        self.FILTERS=[5*nmuscles,10*nmuscles]
+        conv_out_channels = 10
         self.convs = nn.ModuleList([nn.Conv1d(in_channels=1, out_channels=conv_out_channels, kernel_size=k_size, stride=nmuscles) for k_size in self.FILTERS])
         #self.conv1 = nn.Conv1d(in_channels=1,out_channels=1,kernel_size=15,stride=5)
-        #self.mp = nn.MaxPool1d(2)
+        self.mp = nn.MaxPool1d(2)
         #self.dropout = nn.Dropout(0.5)
-        self.fc1 = nn.Linear(330,32)
+        self.fc1 = nn.Linear(130,32)
         self.fc2 = nn.Linear(32,1)
 
     def test_dim(self,x):
@@ -581,10 +581,10 @@ class Model9(nn.Module):
         x = [F.relu(conv(x)) for conv in self.convs]
         for out in x:
             print("Out: " + str(out.shape))
-        #print("Do maxpool")
-        #x = [model.mp(i) for i in x]   
-        #for i in x:
-            #print("Out: " + str(i.shape))
+        print("Do maxpool")
+        x = [self.mp(i) for i in x]   
+        for i in x:
+            print("Out: " + str(i.shape))
         print("Do concat")    
         x = torch.cat(x,2)
         x = x.view(32,1,-1).squeeze()
@@ -600,7 +600,7 @@ class Model9(nn.Module):
     def forward(self,x):
         x = x.view(batch_size,1,-1)
         x = [F.relu(conv(x)) for conv in self.convs]
-        x = [F.relu(conv(i)) for i in x for conv in self.convs_2]
+        x = [self.mp(i) for i in x]
         x = torch.cat(x,2)
         x = x.view(32,1,-1).squeeze()
         x = F.relu(self.fc1(x))
@@ -609,7 +609,7 @@ class Model9(nn.Module):
     
 
 
-# In[132]:
+# In[272]:
 
 #TEST DIMENSIONS
 def testdimensions():
@@ -617,10 +617,10 @@ def testdimensions():
     x = torch.randn(32,1,160)
     model.test_dim(x)
  
-#testdimensions()
+testdimensions()
 
 
-# In[133]:
+# In[273]:
 
 fieldnames = ['Fold','Acc_test_val', 'Accuracy','Precision','Recall','F1_score','Stop_epoch','Accuracy_dev'] #coloumn names report FOLD CSV
 torch.backends.cudnn.benchmark = True
@@ -820,7 +820,7 @@ def train_test():
         
 
 
-# In[135]:
+# In[274]:
 
 if use_cuda and not use_gputil and cuda_device!=None and torch.cuda.is_available():
     with torch.cuda.device(cuda_device):
