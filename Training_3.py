@@ -34,9 +34,9 @@ model_select = [0]
 maxepoch = 1#150
 maxpatience = 15
 
-use_cuda = False
+use_cuda = True
 use_gputil = False
-cuda_device = None
+cuda_device = 0
 
 
 # In[118]:
@@ -146,8 +146,6 @@ def accuracy (loader, model):
     with torch.no_grad():
         for i, data in enumerate(loader, 0):
             inputs, labels = data
-            if use_cuda: 
-                inputs, labels = inputs.cuda, labels.cuda()
             outputs = model(inputs)
             outputs[outputs>=0.5] = 1
             outputs[outputs<0.5] = 0
