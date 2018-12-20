@@ -619,7 +619,7 @@ if use_gputil and torch.cuda.is_available():
         os.environ["CUDA_VISIBLE_DEVICES"] = str(deviceIDs[0])
         print("USING GPUUtils " + device_id)
 else:
-    device_id = 'cuda:1' if torch.cuda.is_available() else 'cpu'
+    device_id = '0' if torch.cuda.is_available() else 'cpu'
     device = torch.device(device_id)
     print("USING " + device_id)
 
