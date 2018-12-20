@@ -5,7 +5,7 @@
 
 ##SETTINGS
 
-nfold = 1 #number of folds to train
+nfold = 10 #number of folds to train
 lr=0.1 #learning rate
 
 batch_size = 32
@@ -28,15 +28,36 @@ use_gonio=False
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4']
-model_select = [0] 
+model_select = [3] 
 
 #Early stop settings
-maxepoch = 1#150
+maxepoch = 150
 maxpatience = 15
 
 use_cuda = True
 use_gputil = True
 cuda_device = None
+
+
+# In[ ]:
+
+#CUDA
+
+if use_gputil and torch.cuda.is_available():
+    import GPUtil
+
+    # Get the first available GPU
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    try:
+        deviceIDs = GPUtil.getAvailable(order='memory', limit=1, maxLoad=100, maxMemory=20)  # return a list of available gpus
+    except:
+        print('GPU not compatible with NVIDIA-SMI')
+    else:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(deviceIDs[0])
+        
+    ttens = torch.tensor(np.array([[1, 2, 3], [4, 5, 6]]))
+    ttens = ttens.cuda()
+    
 
 
 # In[118]:
@@ -800,20 +821,6 @@ def train_test():
 
 
 # In[135]:
-
-#CUDA
-
-if use_gputil and torch.cuda.is_available():
-    import GPUtil
-
-    # Get the first available GPU
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    try:
-        deviceIDs = GPUtil.getAvailable(order='memory', limit=1, maxLoad=100, maxMemory=20)  # return a list of available gpus
-    except:
-        print('GPU not compatible with NVIDIA-SMI')
-    else:
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(deviceIDs[0])
 
 if use_cuda and not use_gputil and cuda_device!=None and torch.cuda.is_available():
     with torch.cuda.device(cuda_device):
