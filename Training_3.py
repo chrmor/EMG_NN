@@ -1,6 +1,28 @@
 
 # coding: utf-8
 
+# In[ ]:
+
+##Import libraries
+import torch
+import pandas as pd
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+import random
+import time
+import datetime
+import os
+import sys
+import csv
+from torch import backends
+from beautifultable import BeautifulTable
+from torch.autograd import Variable
+from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data import Dataset, DataLoader
+from sklearn.metrics import precision_recall_fscore_support, accuracy_score
+
+
 # In[256]:
 
 ##SETTINGS
@@ -58,28 +80,6 @@ if use_gputil and torch.cuda.is_available():
     ttens = torch.tensor(np.array([[1, 2, 3], [4, 5, 6]]))
     ttens = ttens.cuda()
     
-
-
-# In[258]:
-
-##Import libraries
-import torch
-import pandas as pd
-import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-import random
-import time
-import datetime
-import os
-import sys
-import csv
-from torch import backends
-from beautifultable import BeautifulTable
-from torch.autograd import Variable
-from torch.utils.data.sampler import SubsetRandomSampler
-from torch.utils.data import Dataset, DataLoader
-from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 
 # In[259]:
