@@ -34,9 +34,9 @@ model_select = [0]
 maxepoch = 1#150
 maxpatience = 15
 
-use_cuda = True
+use_cuda = False
 use_gputil = False
-cuda_device = 0
+cuda_device = None
 
 
 # In[118]:
@@ -120,7 +120,7 @@ def save_checkpoint (state, is_best, filename, logfile):
 # In[124]:
 
 #Compute sklearn metrics: Recall, Precision, F1-score
-def pre_rec (loader):
+def pre_rec (loader, model):
     y_true = np.array([])
     y_pred = np.array([])
     with torch.no_grad():
@@ -140,7 +140,7 @@ def pre_rec (loader):
 # In[125]:
 
 #Calculates model accuracy. Predicted vs Correct.
-def accuracy (loader):
+def accuracy (loader, model):
     total=0
     correct=0
     with torch.no_grad():
@@ -699,7 +699,7 @@ def train_test():
 
                 criterion = nn.BCELoss(size_average=True)
                 optimizer = torch.optim.SGD(model.parameters(), lr)    
-                msg = 'Accuracy on test set before training: '+str(accuracy(test_loader))+'\n'
+                msg = 'Accuracy on test set before training: '+str(accuracy(test_loader, model))+'\n'
                 print(msg)
                 logfile.write(msg + "\n")
                 #EARLY STOP
@@ -730,7 +730,7 @@ def train_test():
                             #msg = 'Accuracy on dev set:' + str(accuracy(dev_loader))
                             #print(msg)
                             #logfile.write(msg + "\n")        
-                    accdev = (accuracy(dev_loader))
+                    accdev = (accuracy(dev_loader, model))
                     msg = 'Accuracy on dev set:' + str(accdev)
                     print(msg)
                     logfile.write(msg + "\n")        
@@ -752,11 +752,11 @@ def train_test():
                 model.load_state_dict(state['state_dict'])
                 accuracy_dev = state['best_acc_dev']
                 model.eval()
-                acctest = (accuracy(test_loader))
-                acctest_val = (accuracy(test_val_loader))
+                acctest = (accuracy(test_loader, model))
+                acctest_val = (accuracy(test_val_loader, model))
                 accs[i-1] = acctest
                 accs_test_val[i-1] = acctest_val
-                precision,recall,f1_score = pre_rec(test_loader)
+                precision,recall,f1_score = pre_rec(test_loader, model)
                 precisions[i-1] = precision
                 recalls[i-1] = recall
                 f1_scores[i-1] = f1_score
@@ -818,7 +818,7 @@ if use_gputil and torch.cuda.is_available():
         os.environ["CUDA_VISIBLE_DEVICES"] = str(deviceIDs[0])
 
 if use_cuda and not use_gputil and cuda_device!=None and torch.cuda.is_available():
-    with torch.cuda.device(cuda_device):
+    with torch.cuda.device(params['cuda_device']):
         train_test()
 else:
     train_test()
