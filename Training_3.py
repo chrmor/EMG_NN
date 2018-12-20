@@ -1,11 +1,11 @@
 
 # coding: utf-8
 
-# In[99]:
+# In[117]:
 
 ##SETTINGS
 
-nfold = 10 #number of folds to train
+nfold = 1 #number of folds to train
 lr=0.1 #learning rate
 
 batch_size = 32
@@ -28,16 +28,18 @@ use_gonio=False
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4']
-model_select = [3] 
+model_select = [0] 
 
 #Early stop settings
-maxepoch = 150
+maxepoch = 1#150
 maxpatience = 15
 
-use_gputil = False
+use_cuda = True
+use_gputil = True
+cuda_device = None
 
 
-# In[100]:
+# In[118]:
 
 ##Import libraries
 import torch
@@ -59,12 +61,12 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 
-# In[102]:
+# In[119]:
 
 #torch.cuda.is_available()
 
 
-# In[103]:
+# In[120]:
 
 #Seeds
 torch.manual_seed(5)
@@ -72,7 +74,7 @@ random.seed(10)
 np.random.seed(20)
 
 
-# In[104]:
+# In[121]:
 
 #Prints header of beautifultable report for each fold
 def header(model_list,nmodel,nfold,traindataset,testdataset):
@@ -86,7 +88,7 @@ def header(model_list,nmodel,nfold,traindataset,testdataset):
     print('Testset fold'+str(i)+' shape: '+str(shape[0])+'x'+str((shape[1]+1))+'\n')
 
 
-# In[105]:
+# In[122]:
 
 #Prints actual beautifultable for each fold
 def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_dev):
@@ -100,7 +102,7 @@ def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_d
     print(table)
 
 
-# In[106]:
+# In[123]:
 
 #Saves best model state on disk for each fold
 def save_checkpoint (state, is_best, filename, logfile):
@@ -115,7 +117,7 @@ def save_checkpoint (state, is_best, filename, logfile):
         logfile.write(msg + "\n")
 
 
-# In[107]:
+# In[124]:
 
 #Compute sklearn metrics: Recall, Precision, F1-score
 def pre_rec (loader):
@@ -135,7 +137,7 @@ def pre_rec (loader):
     return round(precision,3), round(recall,3), round(f1_score,3)
 
 
-# In[108]:
+# In[125]:
 
 #Calculates model accuracy. Predicted vs Correct.
 def accuracy (loader):
@@ -144,7 +146,9 @@ def accuracy (loader):
     with torch.no_grad():
         for i, data in enumerate(loader, 0):
             inputs, labels = data
-            outputs = model(inputs.to(device))
+            if use_cuda: 
+                inputs, labels = inputs.cuda, labels.cuda()
+            outputs = model(inputs)
             outputs[outputs>=0.5] = 1
             outputs[outputs<0.5] = 0
             total += labels.size(0)
@@ -152,7 +156,7 @@ def accuracy (loader):
     return round((100 * correct / total),3)
 
 
-# In[109]:
+# In[126]:
 
 #Arrays to store metrics
 accs = np.empty([nfold,1])
@@ -182,7 +186,7 @@ def stds (accs,precs,recs,f1,accs_dev):
     return a,p,r,f,a_d
 
 
-# In[110]:
+# In[127]:
 
 #Shuffle
 def dev_shuffle (shuffle_train,shuffle_test,val_split,traindataset,testdataset):
@@ -222,7 +226,7 @@ def data_split (shuffle_train,shuffle_test,val_split,test_val_split,traindataset
     return tr_sampler,d_sampler,tv_sampler,te_sampler
 
 
-# In[111]:
+# In[128]:
 
 '''
 test_val_split = 0.1
@@ -246,7 +250,7 @@ print("Dev: " + str(dev_indices))
 '''
 
 
-# In[112]:
+# In[129]:
 
 #Loads and appends all folds all at once
 trainfolds = []
@@ -286,12 +290,12 @@ else:
 nmuscles=int((len(traindata.columns)-1)/20) #used for layer dimensions and stride CNNs
 
 
-# In[113]:
+# In[130]:
 
 #trainfolds[0]
 
 
-# In[114]:
+# In[131]:
 
 #List of all models. Common activation function: ReLu. Common dp_ratio=0.5. Last activation function: sigmoid.
 
@@ -586,7 +590,7 @@ class Model9(nn.Module):
     
 
 
-# In[115]:
+# In[132]:
 
 #TEST DIMENSIONS
 def testdimensions():
@@ -597,10 +601,207 @@ def testdimensions():
 #testdimensions()
 
 
-# In[116]:
+# In[133]:
 
 fieldnames = ['Fold','Acc_test_val', 'Accuracy','Precision','Recall','F1_score','Stop_epoch','Accuracy_dev'] #coloumn names report FOLD CSV
 torch.backends.cudnn.benchmark = True
+
+#TRAINING LOOP
+def train_test():
+    for k in model_select:
+        table = BeautifulTable()
+        avgtable = BeautifulTable()
+        fieldnames1 = [model_lst[k],'Avg','Std_dev'] #column names report GLOBAL CSV
+        folder = os.path.join(cwd,'Report_'+str(model_lst[k]))
+        if not os.path.exists(folder):
+            os.mkdir(folder)
+
+        logfilepath = os.path.join(folder,'log.txt')
+        logfile = open(logfilepath,"w") 
+
+        with open(os.path.join(folder,'Report_folds.csv'),'w') as f_fold, open(os.path.join(folder,'Report_global.csv'),'w') as f_global:
+            writer = csv.DictWriter(f_fold, fieldnames = fieldnames)
+            writer1  = csv.DictWriter(f_global, fieldnames = fieldnames1)
+            writer.writeheader()
+            writer1.writeheader()
+            t0 = 0
+            t1 = 0
+            for i in range(1,nfold+1):
+                t0 = time.time()
+
+                class Traindataset(Dataset):
+                    def __init__(self):
+                        self.data=trainfolds[i-1]
+                        self.x_data=torch.from_numpy(np.asarray(self.data.iloc[:, 0:-1])) 
+                        self.len=self.data.shape[0]
+                        self.y_data = torch.from_numpy(np.asarray(self.data.iloc[:, [-1]]))
+                        if (use_cuda):
+                            self.x_data = self.x_data.cuda()
+                            self.y_data = self.y_data.cuda()
+                    def __getitem__(self, index):
+                        return self.x_data[index], self.y_data[index]
+                    def __len__(self):
+                        return self.len
+                class Testdataset(Dataset):
+                    def __init__(self):
+                        self.data=testfolds[i-1]
+                        self.x_data=torch.from_numpy(np.asarray(self.data.iloc[:, 0:-1]))
+                        self.len=self.data.shape[0]
+                        self.y_data = torch.from_numpy(np.asarray(self.data.iloc[:, [-1]]))
+                        if (use_cuda):
+                            self.x_data = self.x_data.cuda()
+                            self.y_data = self.y_data.cuda()
+                    def __getitem__(self, index):
+                        return self.x_data[index], self.y_data[index]
+                    def __len__(self):
+                        return self.len
+
+                traindataset = Traindataset()
+                testdataset = Testdataset()
+
+                header(model_lst,k,i,traindataset,testdataset)
+
+                #train_sampler,dev_sampler,test_sampler=dev_shuffle(shuffle_train,shuffle_test,val_split,traindataset,testdataset)
+                train_sampler,dev_sampler,test_val_sampler,test_sampler=data_split(shuffle_train,shuffle_test,val_split,test_val_split,traindataset,testdataset)
+                #loaders
+                train_loader = torch.utils.data.DataLoader(traindataset, batch_size=batch_size, 
+                                                           sampler=train_sampler,drop_last=True)
+                test_val_loader = torch.utils.data.DataLoader(traindataset, batch_size=batch_size,
+                                                                sampler=test_val_sampler,drop_last=True)
+                dev_loader = torch.utils.data.DataLoader(traindataset, batch_size=batch_size, 
+                                                           sampler=dev_sampler,drop_last=True)
+                test_loader = torch.utils.data.DataLoader(testdataset, batch_size=batch_size,
+                                                                sampler=test_sampler,drop_last=True)
+
+                if k==0:
+                    model=Model0()
+                if k==1:
+                    model=Model1()
+                if k==2:
+                    model=Model2()
+                if k==3:
+                    model=Model3()
+                if k==4:
+                    model=Model4()
+                if k==5:
+                    model=Model5()
+                if k==6:
+                    model=Model6()
+                if k==7:
+                    model=Model7()
+                if k==8:
+                    model=Model8()
+                if k==9:
+                    model=Model9()
+
+                if (use_cuda):
+                    model = model.cuda()
+
+                criterion = nn.BCELoss(size_average=True)
+                optimizer = torch.optim.SGD(model.parameters(), lr)    
+                msg = 'Accuracy on test set before training: '+str(accuracy(test_loader))+'\n'
+                print(msg)
+                logfile.write(msg + "\n")
+                #EARLY STOP
+                epoch = 0
+                patience = 0
+                best_acc_dev=0
+                while (epoch<maxepoch and patience < maxpatience):
+                    running_loss = 0.0
+                    for l, data in enumerate(train_loader, 0):
+                        inputs, labels = data
+                        if use_cuda:
+                            inputs, labels = inputs.cuda(), labels.cuda()
+                        inputs, labels = Variable(inputs), Variable(labels)
+                        y_pred = model(inputs)
+                        if use_cuda:
+                            y_pred = y_pred.cuda()
+                        loss = criterion(y_pred, labels)
+                        optimizer.zero_grad()
+                        loss.backward()
+                        optimizer.step()
+                        running_loss += loss.item()
+                        #print accuracy ever l mini-batches
+                        if l % 2000 == 1999:
+                            msg = '[%d, %5d] loss: %.3f' %(epoch + 1, l + 1, running_loss / 999)
+                            print(msg)
+                            logfile.write(msg + "\n")
+                            running_loss = 0.0
+                            #msg = 'Accuracy on dev set:' + str(accuracy(dev_loader))
+                            #print(msg)
+                            #logfile.write(msg + "\n")        
+                    accdev = (accuracy(dev_loader))
+                    msg = 'Accuracy on dev set:' + str(accdev)
+                    print(msg)
+                    logfile.write(msg + "\n")        
+                    is_best = bool(accdev > best_acc_dev)
+                    best_acc_dev = (max(accdev, best_acc_dev))
+                    save_checkpoint({
+                        'epoch': epoch + 1,
+                        'state_dict': model.state_dict(),
+                        'best_acc_dev': best_acc_dev
+                    }, is_best,os.path.join(folder,'F'+str(i)+'best.pth.tar'), logfile)
+                    if is_best:
+                        patience=0
+                    else:
+                        patience = patience+1
+                    epoch = epoch+1
+                    logfile.flush()
+                state = torch.load(os.path.join(folder,'F'+str(i)+'best.pth.tar'))
+                stop_epoch = state['epoch']
+                model.load_state_dict(state['state_dict'])
+                accuracy_dev = state['best_acc_dev']
+                model.eval()
+                acctest = (accuracy(test_loader))
+                acctest_val = (accuracy(test_val_loader))
+                accs[i-1] = acctest
+                accs_test_val[i-1] = acctest_val
+                precision,recall,f1_score = pre_rec(test_loader)
+                precisions[i-1] = precision
+                recalls[i-1] = recall
+                f1_scores[i-1] = f1_score
+                accs_dev[i-1] = accuracy_dev
+                writer.writerow({'Fold': i,'Acc_test_val': acctest_val, 'Accuracy': acctest,'Precision': precision,'Recall': recall,'F1_score': f1_score,'Stop_epoch': stop_epoch,'Accuracy_dev': accuracy_dev})
+                table.column_headers = fieldnames
+                table.append_row([i,acctest_val,acctest,precision,recall,f1_score,stop_epoch,accuracy_dev])
+                print(table)
+                print('----------------------------------------------------------------------')
+                logfile.write(str(table) + "\n----------------------------------------------------------------------\n")
+                t1 = time.time()
+                times[i-1] = int(t1-t0)
+            duration = str(datetime.timedelta(seconds=np.sum(times)))
+            writer.writerow({})
+            writer.writerow({'Fold': 'Elapsed time: '+duration})
+            avg_acc_test_val = round(np.average(accs_test_val),3)
+            std_acc_test_val = round(np.std(accs_test_val),3)
+            avg_a,avg_p,avg_r,avg_f,avg_a_d=averages(accs,precisions,recalls,f1_scores,accs_dev)
+            std_a,std_p,std_r,std_f,std_a_d=stds(accs,precisions,recalls,f1_scores,accs_dev)
+            writer1.writerow({model_lst[k]: 'Accuracy','Avg': avg_a,'Std_dev': std_acc_test_val})
+            writer1.writerow({model_lst[k]: 'Accuracy test val','Avg': avg_acc_test_val,'Std_dev': std_a})
+            writer1.writerow({model_lst[k]: 'Precision','Avg': avg_p,'Std_dev': std_p})
+            writer1.writerow({model_lst[k]: 'Recall','Avg': avg_r,'Std_dev': std_r})
+            writer1.writerow({model_lst[k]: 'F1_score','Avg': avg_f,'Std_dev': std_f})
+            writer1.writerow({model_lst[k]: 'Accuracy_dev','Avg': avg_a_d,'Std_dev': std_a_d})
+            writer1.writerow({})
+            writer1.writerow({model_lst[k]: 'Elapsed time: '+duration})
+            avgtable.column_headers = fieldnames1
+            avgtable.append_row(['Accuracy',avg_a,std_a])
+            avgtable.append_row(['Accuracy test val',avg_acc_test_val,std_acc_test_val])
+            avgtable.append_row(['Precision',avg_p,std_p])
+            avgtable.append_row(['Recall',avg_r,std_r])
+            avgtable.append_row(['F1_score',avg_a,std_f])
+            avgtable.append_row(['Accuracy_dev',avg_a_d,std_a_d])
+            print(avgtable)
+            logfile.write(str(avgtable) + "\n")
+            msg = 'Elapsed time: '+ duration + '\n\n'
+            print(msg)
+            logfile.write(msg )
+
+        logfile.close()
+        
+
+
+# In[135]:
 
 #CUDA
 
@@ -614,192 +815,13 @@ if use_gputil and torch.cuda.is_available():
     except:
         print('GPU not compatible with NVIDIA-SMI')
     else:
-        device_id = str(deviceIDs[0])
-        device = torch.device(device_id)
         os.environ["CUDA_VISIBLE_DEVICES"] = str(deviceIDs[0])
+
+if use_cuda and not use_gputil and cuda_device!=None and torch.cuda.is_available():
+    with torch.cuda.device(params['cuda_device']):
+        train_test()
 else:
-    device_id = '0' if torch.cuda.is_available() else 'cpu'
-    device = torch.device(device_id)
-
-#TRAINING LOOP
-for k in model_select:
-    table = BeautifulTable()
-    avgtable = BeautifulTable()
-    fieldnames1 = [model_lst[k],'Avg','Std_dev'] #column names report GLOBAL CSV
-    folder = os.path.join(cwd,'Report_'+str(model_lst[k]))
-    if not os.path.exists(folder):
-        os.mkdir(folder)
-    
-    logfilepath = os.path.join(folder,'log.txt')
-    logfile = open(logfilepath,"w") 
-    
-    with open(os.path.join(folder,'Report_folds.csv'),'w') as f_fold, open(os.path.join(folder,'Report_global.csv'),'w') as f_global:
-        writer = csv.DictWriter(f_fold, fieldnames = fieldnames)
-        writer1  = csv.DictWriter(f_global, fieldnames = fieldnames1)
-        writer.writeheader()
-        writer1.writeheader()
-        t0 = 0
-        t1 = 0
-        for i in range(1,nfold+1):
-            t0 = time.time()
-
-            class Traindataset(Dataset):
-                def __init__(self):
-                    self.data=trainfolds[i-1]
-                    self.x_data=torch.from_numpy(np.asarray(self.data.iloc[:, 0:-1])).to(device)
-                    self.len=self.data.shape[0]
-                    self.y_data = torch.from_numpy(np.asarray(self.data.iloc[:, [-1]])).to(device)
-                def __getitem__(self, index):
-                    return self.x_data[index], self.y_data[index]
-                def __len__(self):
-                    return self.len
-            class Testdataset(Dataset):
-                def __init__(self):
-                    self.data=testfolds[i-1]
-                    self.x_data=torch.from_numpy(np.asarray(self.data.iloc[:, 0:-1])).to(device)
-                    self.len=self.data.shape[0]
-                    self.y_data = torch.from_numpy(np.asarray(self.data.iloc[:, [-1]])).to(device)
-                def __getitem__(self, index):
-                    return self.x_data[index], self.y_data[index]
-                def __len__(self):
-                    return self.len
-
-            traindataset = Traindataset()
-            testdataset = Testdataset()
-
-            header(model_lst,k,i,traindataset,testdataset)
-
-            #train_sampler,dev_sampler,test_sampler=dev_shuffle(shuffle_train,shuffle_test,val_split,traindataset,testdataset)
-            train_sampler,dev_sampler,test_val_sampler,test_sampler=data_split(shuffle_train,shuffle_test,val_split,test_val_split,traindataset,testdataset)
-            #loaders
-            train_loader = torch.utils.data.DataLoader(traindataset, batch_size=batch_size, 
-                                                       sampler=train_sampler,drop_last=True)
-            test_val_loader = torch.utils.data.DataLoader(traindataset, batch_size=batch_size,
-                                                            sampler=test_val_sampler,drop_last=True)
-            dev_loader = torch.utils.data.DataLoader(traindataset, batch_size=batch_size, 
-                                                       sampler=dev_sampler,drop_last=True)
-            test_loader = torch.utils.data.DataLoader(testdataset, batch_size=batch_size,
-                                                            sampler=test_sampler,drop_last=True)
-
-            if k==0:
-                model=Model0().to(device)
-            if k==1:
-                model=Model1().to(device)
-            if k==2:
-                model=Model2().to(device)
-            if k==3:
-                model=Model3().to(device)
-            if k==4:
-                model=Model4().to(device)
-            if k==5:
-                model=Model5().to(device)
-            if k==6:
-                model=Model6().to(device)
-            if k==7:
-                model=Model7().to(device)
-            if k==8:
-                model=Model8().to(device)
-            if k==9:
-                model=Model9().to(device)
-                
-            criterion = nn.BCELoss(size_average=True)
-            optimizer = torch.optim.SGD(model.parameters(), lr)    
-            msg = 'Accuracy on test set before training: '+str(accuracy(test_loader))+'\n'
-            print(msg)
-            logfile.write(msg + "\n")
-            #EARLY STOP
-            epoch = 0
-            patience = 0
-            best_acc_dev=0
-            while (epoch<maxepoch and patience < maxpatience):
-                running_loss = 0.0
-                for l, data in enumerate(train_loader, 0):
-                    inputs, labels = data
-                    inputs, labels = Variable(inputs.to(device)), Variable(labels.to(device))
-                    y_pred = model(inputs.to(device))
-                    loss = criterion(y_pred.to(device), labels.to(device))
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
-                    running_loss += loss.item()
-                    #print accuracy ever l mini-batches
-                    if l % 2000 == 1999:
-                        msg = '[%d, %5d] loss: %.3f' %(epoch + 1, l + 1, running_loss / 999)
-                        print(msg)
-                        logfile.write(msg + "\n")
-                        running_loss = 0.0
-                        #msg = 'Accuracy on dev set:' + str(accuracy(dev_loader))
-                        #print(msg)
-                        #logfile.write(msg + "\n")        
-                accdev = (accuracy(dev_loader))
-                msg = 'Accuracy on dev set:' + str(accdev)
-                print(msg)
-                logfile.write(msg + "\n")        
-                is_best = bool(accdev > best_acc_dev)
-                best_acc_dev = (max(accdev, best_acc_dev))
-                save_checkpoint({
-                    'epoch': epoch + 1,
-                    'state_dict': model.state_dict(),
-                    'best_acc_dev': best_acc_dev
-                }, is_best,os.path.join(folder,'F'+str(i)+'best.pth.tar'), logfile)
-                if is_best:
-                    patience=0
-                else:
-                    patience = patience+1
-                epoch = epoch+1
-                logfile.flush()
-            state = torch.load(os.path.join(folder,'F'+str(i)+'best.pth.tar'))
-            stop_epoch = state['epoch']
-            model.load_state_dict(state['state_dict'])
-            accuracy_dev = state['best_acc_dev']
-            model.eval()
-            acctest = (accuracy(test_loader))
-            acctest_val = (accuracy(test_val_loader))
-            accs[i-1] = acctest
-            accs_test_val[i-1] = acctest_val
-            precision,recall,f1_score = pre_rec(test_loader)
-            precisions[i-1] = precision
-            recalls[i-1] = recall
-            f1_scores[i-1] = f1_score
-            accs_dev[i-1] = accuracy_dev
-            writer.writerow({'Fold': i,'Acc_test_val': acctest_val, 'Accuracy': acctest,'Precision': precision,'Recall': recall,'F1_score': f1_score,'Stop_epoch': stop_epoch,'Accuracy_dev': accuracy_dev})
-            table.column_headers = fieldnames
-            table.append_row([i,acctest_val,acctest,precision,recall,f1_score,stop_epoch,accuracy_dev])
-            print(table)
-            print('----------------------------------------------------------------------')
-            logfile.write(str(table) + "\n----------------------------------------------------------------------\n")
-            t1 = time.time()
-            times[i-1] = int(t1-t0)
-        duration = str(datetime.timedelta(seconds=np.sum(times)))
-        writer.writerow({})
-        writer.writerow({'Fold': 'Elapsed time: '+duration})
-        avg_acc_test_val = round(np.average(accs_test_val),3)
-        std_acc_test_val = round(np.std(accs_test_val),3)
-        avg_a,avg_p,avg_r,avg_f,avg_a_d=averages(accs,precisions,recalls,f1_scores,accs_dev)
-        std_a,std_p,std_r,std_f,std_a_d=stds(accs,precisions,recalls,f1_scores,accs_dev)
-        writer1.writerow({model_lst[k]: 'Accuracy','Avg': avg_a,'Std_dev': std_acc_test_val})
-        writer1.writerow({model_lst[k]: 'Accuracy test val','Avg': avg_acc_test_val,'Std_dev': std_a})
-        writer1.writerow({model_lst[k]: 'Precision','Avg': avg_p,'Std_dev': std_p})
-        writer1.writerow({model_lst[k]: 'Recall','Avg': avg_r,'Std_dev': std_r})
-        writer1.writerow({model_lst[k]: 'F1_score','Avg': avg_f,'Std_dev': std_f})
-        writer1.writerow({model_lst[k]: 'Accuracy_dev','Avg': avg_a_d,'Std_dev': std_a_d})
-        writer1.writerow({})
-        writer1.writerow({model_lst[k]: 'Elapsed time: '+duration})
-        avgtable.column_headers = fieldnames1
-        avgtable.append_row(['Accuracy',avg_a,std_a])
-        avgtable.append_row(['Accuracy test val',avg_acc_test_val,std_acc_test_val])
-        avgtable.append_row(['Precision',avg_p,std_p])
-        avgtable.append_row(['Recall',avg_r,std_r])
-        avgtable.append_row(['F1_score',avg_a,std_f])
-        avgtable.append_row(['Accuracy_dev',avg_a_d,std_a_d])
-        print(avgtable)
-        logfile.write(str(avgtable) + "\n")
-        msg = 'Elapsed time: '+ duration + '\n\n'
-        print(msg)
-        logfile.write(msg )
-        
-    logfile.close()
-        
+    train_test()
 
 
 # In[ ]:
