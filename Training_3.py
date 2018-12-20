@@ -35,8 +35,8 @@ maxepoch = 1#150
 maxpatience = 15
 
 use_cuda = True
-use_gputil = True
-cuda_device = None
+use_gputil = False
+cuda_device = 0
 
 
 # In[118]:
@@ -818,7 +818,7 @@ if use_gputil and torch.cuda.is_available():
         os.environ["CUDA_VISIBLE_DEVICES"] = str(deviceIDs[0])
 
 if use_cuda and not use_gputil and cuda_device!=None and torch.cuda.is_available():
-    with torch.cuda.device(params['cuda_device']):
+    with torch.cuda.device(cuda_device):
         train_test()
 else:
     train_test()
