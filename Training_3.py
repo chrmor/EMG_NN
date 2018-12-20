@@ -35,8 +35,8 @@ maxepoch = 1#150
 maxpatience = 15
 
 use_cuda = True
-use_gputil = False
-cuda_device = 0
+use_gputil = True
+cuda_device = None
 
 
 # In[118]:
