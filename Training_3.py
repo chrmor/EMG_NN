@@ -56,8 +56,8 @@ model_select = [0, 3, 9, 10]
 maxepoch = 10
 maxpatience = 15
 
-use_cuda = False
-use_gputil = False
+use_cuda = True
+use_gputil = True
 cuda_device = None
 
 
