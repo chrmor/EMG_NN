@@ -1,13 +1,14 @@
 
 # coding: utf-8
 
-# In[180]:
+# In[354]:
 
 ##Import libraries
 import torch
 import pandas as pd
 import torch.nn as nn
 import torch.nn.functional as F
+import torch
 import numpy as np
 import random
 import time
@@ -23,16 +24,18 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 
-# In[198]:
+# In[355]:
 
 ##SETTINGS
 
-nfold = 1 #number of folds to train
+nfold = 10 #number of folds to train
 lr=0.1 #learning rate
 
 batch_size = 32
 val_split = .1 #trainset percentage allocated for devset
 test_val_split = .1 #trainset percentage allocated for test_val set (i.e. the test set of known patients)
+
+
 spw=20 #samples per window
 nmuscles=10 #initial number of muscles acquired
 
@@ -41,27 +44,29 @@ shuffle_train = True
 shuffle_test= True
 
 #Delete electrogonio signals
-del_gonio=True
-
+exclude_features=True
 #Only use electrogonio signals
-use_gonio=False
+include_only_features=False
+
+features_select = [9,10] #1 to 4
 
 #Select which models to run. Insert comma separated values into 'model_select' var.
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
-model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d','MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4', 'MultiConv1d_5']
-model_select = [0, 3, 9, 10] 
+model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d',
+             'MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4', 'MultiConv1d_5', 'FF2', 'CNN1', 'FF3', 'FF4', 'CNN2']
+model_select = [0,11,12,13] 
 
 #Early stop settings
-maxepoch = 10
-maxpatience = 15
+maxepoch = 100
+maxpatience = 10
 
 use_cuda = True
 use_gputil = True
 cuda_device = None
 
 
-# In[199]:
+# In[356]:
 
 #CUDA
 
@@ -71,7 +76,7 @@ if use_gputil and torch.cuda.is_available():
     # Get the first available GPU
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     try:
-        deviceIDs = GPUtil.getAvailable(order='memory', limit=2, maxLoad=100, maxMemory=20)  # return a list of available gpus
+        deviceIDs = GPUtil.getAvailable(order='memory', limit=1, maxLoad=100, maxMemory=20)  # return a list of available gpus
     except:
         print('GPU not compatible with NVIDIA-SMI')
     else:
@@ -82,20 +87,23 @@ if use_gputil and torch.cuda.is_available():
     
 
 
-# In[200]:
+# In[357]:
 
 #torch.cuda.is_available()
 
 
-# In[201]:
+# In[358]:
 
 #Seeds
-torch.manual_seed(5)
-random.seed(10)
-np.random.seed(20)
+def setSeeds(seed):
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    
+setSeeds(0)
 
 
-# In[202]:
+# In[359]:
 
 #Prints header of beautifultable report for each fold
 def header(model_list,nmodel,nfold,traindataset,testdataset):
@@ -109,7 +117,7 @@ def header(model_list,nmodel,nfold,traindataset,testdataset):
     print('Testset fold'+str(i)+' shape: '+str(shape[0])+'x'+str((shape[1]+1))+'\n')
 
 
-# In[203]:
+# In[360]:
 
 #Prints actual beautifultable for each fold
 def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_dev):
@@ -123,7 +131,7 @@ def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_d
     print(table)
 
 
-# In[204]:
+# In[361]:
 
 #Saves best model state on disk for each fold
 def save_checkpoint (state, is_best, filename, logfile):
@@ -138,7 +146,7 @@ def save_checkpoint (state, is_best, filename, logfile):
         logfile.write(msg + "\n")
 
 
-# In[205]:
+# In[362]:
 
 #Compute sklearn metrics: Recall, Precision, F1-score
 def pre_rec (loader, model):
@@ -158,7 +166,7 @@ def pre_rec (loader, model):
     return round(precision,3), round(recall,3), round(f1_score,3)
 
 
-# In[206]:
+# In[363]:
 
 #Calculates model accuracy. Predicted vs Correct.
 def accuracy (loader, model):
@@ -175,7 +183,7 @@ def accuracy (loader, model):
     return round((100 * correct / total),3)
 
 
-# In[207]:
+# In[364]:
 
 #Arrays to store metrics
 accs = np.empty([nfold,1])
@@ -205,7 +213,7 @@ def stds (accs,precs,recs,f1,accs_dev):
     return a,p,r,f,a_d
 
 
-# In[208]:
+# In[365]:
 
 #Shuffle
 def dev_shuffle (shuffle_train,shuffle_test,val_split,traindataset,testdataset):
@@ -245,7 +253,7 @@ def data_split (shuffle_train,shuffle_test,val_split,test_val_split,traindataset
     return tr_sampler,d_sampler,tv_sampler,te_sampler
 
 
-# In[209]:
+# In[366]:
 
 '''
 test_val_split = 0.1
@@ -269,34 +277,35 @@ print("Dev: " + str(dev_indices))
 '''
 
 
-# In[210]:
+# In[367]:
 
 #Loads and appends all folds all at once
 trainfolds = []
 testfolds = []
 cwd = os.getcwd()
 #l=pd.read_csv(cwd +'/list.csv',sep=',',header=None,dtype=np.int32)
-col_del = np.array([])
-for i in range (8,200,nmuscles):
-    col_del = np.append(col_del,i)
-    col_del = np.append(col_del,i+1)
+col_select = np.array([])
+
+for i in range (0,200,nmuscles):
+    for muscle in features_select:
+        col_select = np.append(col_select,muscle -1 + i)
     cols=np.arange(0,201)
-col_only = np.append(col_del,200)
-if del_gonio & (not use_gonio): #delete gonio
+
+if exclude_features & (not include_only_features): #delete gonio
     for j in range(1,nfold+1):
         print("Loading fold " + str(j))
-        traindata = pd.read_table(os.path.join(cwd,'TrainFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32,usecols=[i for i in cols if i not in col_del.astype(int)])
-        testdata = pd.read_table(os.path.join(cwd,'TestFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32, usecols=[i for i in cols if i not in col_del.astype(int)])
+        traindata = pd.read_table(os.path.join(cwd,'TrainFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32,usecols=[i for i in cols if i not in col_select.astype(int)])
+        testdata = pd.read_table(os.path.join(cwd,'TestFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32, usecols=[i for i in cols if i not in col_select.astype(int)])
         trainfolds.append(traindata)
         testfolds.append(testdata) 
-elif use_gonio & (not del_gonio): #only gonio
+elif include_only_features & (not exclude_features): #only gonio
     for j in range(1,nfold+1):
         print("Loading fold " + str(j))
-        traindata = pd.read_table(os.path.join(cwd,'TrainFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32,usecols=[i for i in cols if i in col_only.astype(int)])
-        testdata = pd.read_table(os.path.join(cwd,'TestFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32, usecols=[i for i in cols if i in col_only.astype(int)])
+        traindata = pd.read_table(os.path.join(cwd,'TrainFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32,usecols=[i for i in cols if i in col_select.astype(int)])
+        testdata = pd.read_table(os.path.join(cwd,'TestFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32, usecols=[i for i in cols if i in col_select.astype(int)])
         trainfolds.append(traindata)
         testfolds.append(testdata) 
-elif (not use_gonio) & (not del_gonio): 
+elif (not include_only_features) & (not exclude_features): 
     for j in range(1,nfold+1):
         print("Loading fold " + str(j))
         traindata = pd.read_csv(os.path.join(cwd,'TrainFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32)
@@ -306,10 +315,12 @@ elif (not use_gonio) & (not del_gonio):
 else:
     raise ValueError('use_gonio and del_gonio cannot be both True')
 
-nmuscles=int((len(traindata.columns)-1)/20) #used for layer dimensions and stride CNNs
+nmuscles=int((len(traindata.columns))/20) #used for layer dimensions and stride CNNs
+print(len(traindata.columns))
+print(nmuscles)
 
 
-# In[211]:
+# In[368]:
 
 #List of all models. Common activation function: ReLu. Common dp_ratio=0.5. Last activation function: sigmoid.
 
@@ -690,20 +701,156 @@ class Model10(nn.Module):
         x = F.relu(self.fc3(x))
         return F.sigmoid(self.fc4(x))
     
+#1 hidden layer
+class Model11(torch.nn.Module):
+    def __init__(self):
+        super(Model11,self).__init__()
+        self.l1 = torch.nn.Linear(spw*nmuscles,128)
+        self.l2 = torch.nn.Linear(128,1)
+        self.sigmoid = torch.nn.Sigmoid()
+        
+    def forward(self,x):
+        out = F.relu(self.l1(x))
+        y_pred=self.sigmoid(self.l2(out))
+        return y_pred
+    
+    
+class Model12(nn.Module):
+    def __init__(self,**kwargs):
+        super(Model12,self).__init__()
+        self.FILTERS=[3*nmuscles, 5*nmuscles, 10*nmuscles]
+        conv_out_channels = 20
+        self.convs = nn.ModuleList([nn.Conv1d(in_channels=1, out_channels=conv_out_channels, kernel_size=k_size, stride=nmuscles) for k_size in self.FILTERS])
+        #self.conv1 = nn.Conv1d(in_channels=1,out_channels=1,kernel_size=15,stride=5)
+        self.mp = nn.AvgPool1d(3)
+        #self.dropout = nn.Dropout(0.5)
+        self.fc1 = nn.Linear(280,128)
+        self.fc2 = nn.Linear(128,1)
+
+    def test_dim(self,x):
+        for f in self.FILTERS:
+            print("Filter size: " + str(f))
+        print("Input:" + str(x.shape))
+        print("Features: " + str(nmuscles))
+        print("Do convnets")
+        x = [F.relu(conv(x)) for conv in self.convs]
+        for out in x:
+            print("Out: " + str(out.shape))
+        print("Do maxpool")
+        x = [self.mp(i) for i in x]   
+        for i in x:
+            print("Out: " + str(i.shape))
+        print("Do concat")    
+        x = torch.cat(x,2)
+        x = x.view(32,1,-1).squeeze()
+        print("Out: " + str(x.shape))
+
+        print("Do Fully connected 1")
+        x = self.fc1(x)
+        print("Out: " + str(x.shape))
+        print("Do Fully connected 2")
+        x = self.fc2(x)
+        print("Out: " + str(x.shape))
+        
+    def forward(self,x):
+        x = x.view(batch_size,1,-1)
+        x = [F.relu(conv(x)) for conv in self.convs]
+        x = [self.mp(i) for i in x]
+        x = torch.cat(x,2)
+        x = x.view(32,1,-1).squeeze()
+        x = F.relu(self.fc1(x))
+        return F.sigmoid(self.fc2(x))
+    
+#1 hidden layer
+class Model13(torch.nn.Module):
+    def __init__(self):
+        super(Model13,self).__init__()
+        self.l1 = torch.nn.Linear(spw*nmuscles,256)
+        self.l2 = torch.nn.Linear(256,1)
+        self.sigmoid = torch.nn.Sigmoid()
+        
+    def forward(self,x):
+        out = F.relu(self.l1(x))
+        y_pred=self.sigmoid(self.l2(out))
+        return y_pred
+    
+#1 hidden layer
+class Model14(torch.nn.Module):
+    def __init__(self):
+        super(Model14,self).__init__()
+        self.l1 = torch.nn.Linear(spw*nmuscles,256)
+        self.l2 = torch.nn.Linear(256,128)
+        self.l3 = torch.nn.Linear(128,1)
+        self.sigmoid = torch.nn.Sigmoid()
+        
+    def forward(self,x):
+        out = F.relu(self.l1(x))
+        out = F.relu(self.l2(out))
+        y_pred=self.sigmoid(self.l3(out))
+        return y_pred
+    
+class Model15(nn.Module):
+    def __init__(self,**kwargs):
+        super(Model15,self).__init__()
+        self.FILTERS=[3*nmuscles, 5*nmuscles, 10*nmuscles]
+        conv_out_channels = 40
+        self.convs = nn.ModuleList([nn.Conv1d(in_channels=1, out_channels=conv_out_channels, kernel_size=k_size, stride=nmuscles) for k_size in self.FILTERS])
+        #self.conv1 = nn.Conv1d(in_channels=1,out_channels=1,kernel_size=15,stride=5)
+        self.mp = nn.AvgPool1d(5)
+        #self.dropout = nn.Dropout(0.5)
+        self.fc1 = nn.Linear(320,128)
+        self.fc2 = nn.Linear(128,1)
+
+    def test_dim(self,x):
+        for f in self.FILTERS:
+            print("Filter size: " + str(f))
+        print("Input:" + str(x.shape))
+        print("Features: " + str(nmuscles))
+        print("Do convnets")
+        x = [F.relu(conv(x)) for conv in self.convs]
+        for out in x:
+            print("Out: " + str(out.shape))
+        print("Do maxpool")
+        x = [self.mp(i) for i in x]   
+        for i in x:
+            print("Out: " + str(i.shape))
+        print("Do concat")    
+        x = torch.cat(x,2)
+        x = x.view(32,1,-1).squeeze()
+        print("Out: " + str(x.shape))
+
+        print("Do Fully connected 1")
+        x = self.fc1(x)
+        print("Out: " + str(x.shape))
+        print("Do Fully connected 2")
+        x = self.fc2(x)
+        print("Out: " + str(x.shape))
+        
+    def forward(self,x):
+        x = x.view(batch_size,1,-1)
+        x = [F.relu(conv(x)) for conv in self.convs]
+        x = [self.mp(i) for i in x]
+        x = torch.cat(x,2)
+        x = x.view(32,1,-1).squeeze()
+        x = F.relu(self.fc1(x))
+        return F.sigmoid(self.fc2(x))
 
 
-# In[212]:
+# In[369]:
 
+#import models
+#from models import *
 #TEST DIMENSIONS
+#models.nmuscles = nmuscles
 def testdimensions():
-    model = Model10()
+    model = Model15()
     x = torch.randn(32,1,160)
     model.test_dim(x)
  
-testdimensions()
+#testdimensions()
 
 
-# In[ ]:
+# In[370]:
 
 fieldnames = ['Fold','Acc_test_val', 'Accuracy','Precision','Recall','F1_score','Stop_epoch','Accuracy_dev'] #coloumn names report FOLD CSV
 torch.backends.cudnn.benchmark = True
@@ -711,6 +858,7 @@ torch.backends.cudnn.benchmark = True
 #TRAINING LOOP
 def train_test():
     for k in model_select:
+        
         table = BeautifulTable()
         avgtable = BeautifulTable()
         fieldnames1 = [model_lst[k],'Avg','Std_dev'] #column names report GLOBAL CSV
@@ -730,7 +878,9 @@ def train_test():
             t1 = 0
             for i in range(1,nfold+1):
                 t0 = time.time()
-
+                
+                setSeeds(0)
+                
                 class Traindataset(Dataset):
                     def __init__(self):
                         self.data=trainfolds[i-1]
@@ -797,7 +947,16 @@ def train_test():
                     model=Model9()
                 if k==10:
                     model=Model10()
-                    
+                if k==11:
+                    model=Model11()  
+                if k==12:
+                    model=Model12()
+                if k==13:
+                    model=Model13()    
+                if k==14:
+                    model=Model14() 
+                if k==15:
+                    model=Model15() 
                 if (use_cuda):
                     model = model.cuda()
 
@@ -905,7 +1064,7 @@ def train_test():
         
 
 
-# In[ ]:
+# In[371]:
 
 
 if use_cuda and not use_gputil and cuda_device!=None and torch.cuda.is_available():
