@@ -21,6 +21,7 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 #To be overwirtten by clients
 _nmuscles = 10
 _spw = 20
+_batch_size = 32
 
 #List of all models. Common activation function: ReLu. Common dp_ratio=0.5. Last activation function: sigmoid.
 
@@ -117,7 +118,7 @@ class Model5(nn.Module):
         self.fc2 = nn.Linear(128,32)
         self.fc3 = nn.Linear(32,1)
     def forward(self,x):
-        x = x.view(batch_size,1,-1)
+        x = x.view(_batch_size,1,-1)
         #print(x.shape)
         x = F.relu(self.mp(self.conv1(x)))
         x = x.view(x.size(0),-1)
@@ -168,7 +169,7 @@ class Model6(nn.Module):
         
         
     def forward(self,x):
-        x = x.view(batch_size,1,-1)
+        x = x.view(_batch_size,1,-1)
         #print("INPUT SIZE: " + str(x.shape))
         x = [F.relu(conv(x)) for conv in self.convs]
         x = [self.mp(i) for i in x]
@@ -225,7 +226,7 @@ class Model7(nn.Module):
         print("Out: " + str(x.shape))
         
     def forward(self,x):
-        x = x.view(batch_size,1,-1)
+        x = x.view(_batch_size,1,-1)
         #print("INPUT SIZE: " + str(x.shape))
         x = [F.relu(conv(x)) for conv in self.convs]
         x = [self.mp(i) for i in x]
@@ -281,7 +282,7 @@ class Model8(nn.Module):
         print("Out: " + str(x.shape))
         
     def forward(self,x):
-        x = x.view(batch_size,1,-1)
+        x = x.view(_batch_size,1,-1)
         x = [F.relu(conv(x)) for conv in self.convs]
         x = [self.mp(i) for i in x]
         x = [F.relu(conv(i)) for i in x for conv in self.convs_2]
@@ -329,7 +330,7 @@ class Model9(nn.Module):
         print("Out: " + str(x.shape))
         
     def forward(self,x):
-        x = x.view(batch_size,1,-1)
+        x = x.view(_batch_size,1,-1)
         x = [F.relu(conv(x)) for conv in self.convs]
         x = [self.mp(i) for i in x]
         x = torch.cat(x,2)
@@ -390,7 +391,7 @@ class Model10(nn.Module):
         print("Out: " + str(x.shape))
         
     def forward(self,x):
-        x = x.view(batch_size,1,-1)
+        x = x.view(_batch_size,1,-1)
         x = [F.relu(conv(x)) for conv in self.convs]
         x = [self.mp(i) for i in x]
         x = [F.relu(conv(i)) for i in x for conv in self.convs_2]
@@ -453,7 +454,7 @@ class Model12(nn.Module):
         print("Out: " + str(x.shape))
         
     def forward(self,x):
-        x = x.view(batch_size,1,-1)
+        x = x.view(_batch_size,1,-1)
         x = [F.relu(conv(x)) for conv in self.convs]
         x = [self.mp(i) for i in x]
         x = torch.cat(x,2)
@@ -527,10 +528,47 @@ class Model15(nn.Module):
         print("Out: " + str(x.shape))
         
     def forward(self,x):
-        x = x.view(batch_size,1,-1)
+        x = x.view(_batch_size,1,-1)
         x = [F.relu(conv(x)) for conv in self.convs]
         x = [self.mp(i) for i in x]
         x = torch.cat(x,2)
         x = x.view(32,1,-1).squeeze()
         x = F.relu(self.fc1(x))
         return F.sigmoid(self.fc2(x))
+    
+    
+ #1 hidden layer
+class Model16(torch.nn.Module):
+    def __init__(self):
+        super(Model16,self).__init__()
+        self.l1 = torch.nn.Linear(_spw*_nmuscles,512)
+        self.l2 = torch.nn.Linear(512,256)
+        self.l3 = torch.nn.Linear(256,128)
+        self.l4 = torch.nn.Linear(128,1)
+        self.sigmoid = torch.nn.Sigmoid()
+        
+    def forward(self,x):
+        out = F.relu(self.l1(x))
+        out = F.relu(self.l2(out))
+        out = F.relu(self.l3(out))
+        y_pred=self.sigmoid(self.l4(out))
+        return y_pred
+    
+ #1 hidden layer
+class Model17(torch.nn.Module):
+    def __init__(self):
+        super(Model17,self).__init__()
+        self.l1 = torch.nn.Linear(_spw*_nmuscles,1024)
+        self.l2 = torch.nn.Linear(1024,512)
+        self.l3 = torch.nn.Linear(512,256)
+        self.l4 = torch.nn.Linear(256,128)
+        self.l5 = torch.nn.Linear(128,1)
+        self.sigmoid = torch.nn.Sigmoid()
+        
+    def forward(self,x):
+        out = F.relu(self.l1(x))
+        out = F.relu(self.l2(out))
+        out = F.relu(self.l3(out))
+        out = F.relu(self.l4(out))
+        y_pred=self.sigmoid(self.l5(out))
+        return y_pred
