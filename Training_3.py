@@ -55,14 +55,14 @@ features_select = [9,10] #1 to 4
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d',
              'MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4', 'MultiConv1d_5', 'FF2', 'CNN1', 'FF3', 'FF4', 'CNN2', 'FF5', 'FF6']
-model_select = [16] 
+model_select = [16,17] 
 
 #Early stop settings
-maxepoch = 1
+maxepoch = 100
 maxpatience = 10
 
-use_cuda = False
-use_gputil = False
+use_cuda = True
+use_gputil = True
 cuda_device = None
 
 
