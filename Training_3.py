@@ -155,13 +155,11 @@ def pre_rec (loader, model):
     with torch.no_grad():
         for i,data in enumerate (loader,0):
             inputs, labels = data
-            inputs = inputs.cpu()
-            labels = labels.cpu()
-            y_true = np.append(y_true,labels)
+            y_true = np.append(y_true,labels.cpu())
             outputs = model(inputs)
             outputs[outputs>=0.5] = 1
             outputs[outputs<0.5] = 0
-            y_pred = np.append(y_pred,outputs)
+            y_pred = np.append(y_pred,outputs.cpu())
     y_true = np.where(y_true==0.0,0,1)
     y_pred = np.where(y_pred==0.0,0,1)
     precision, recall, f1_score, _ = precision_recall_fscore_support(y_true, y_pred, average='binary')
