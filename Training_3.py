@@ -28,7 +28,7 @@ from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 ##SETTINGS
 
-nfold = 3 #number of folds to train
+nfold = 1 #number of folds to train
 lr=0.1 #learning rate
 
 batch_size = 32
@@ -55,10 +55,10 @@ features_select = [9,10] #1 to 4
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d',
              'MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4', 'MultiConv1d_5', 'FF2', 'CNN1', 'FF3', 'FF4', 'CNN2', 'FF5', 'FF6']
-model_select = [16,17] 
+model_select = [16] 
 
 #Early stop settings
-maxepoch = 100
+maxepoch = 1
 maxpatience = 10
 
 use_cuda = True
@@ -155,6 +155,8 @@ def pre_rec (loader, model):
     with torch.no_grad():
         for i,data in enumerate (loader,0):
             inputs, labels = data
+            inputs = inputs.cpu()
+            labels = labels.cpu()
             y_true = np.append(y_true,labels)
             outputs = model(inputs)
             outputs[outputs>=0.5] = 1
