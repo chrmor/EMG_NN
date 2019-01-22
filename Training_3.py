@@ -24,7 +24,7 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 
-# In[2]:
+# In[3]:
 
 ##SETTINGS
 
@@ -56,8 +56,8 @@ features_select = [9,10] #1 to 4
 #e.g: model_select = [0,4,6] to select FF,FC3dp,MultiConv1d
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d',
              'MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4', 'MultiConv1d_5', 
-             'FF2', 'CNN1', 'FF3', 'FF4', 'CNN2', 'FF5', 'FF6', 'CNN3', 'CNN1-FF5', 'CNN0','CN00','CN01']
-model_select = [22] 
+             'FF2', 'CNN1', 'FF3', 'FF4', 'CNN2', 'FF5', 'FF6', 'CNN3', 'CNN1-FF5', 'CNN1-2','CNN1-1']
+model_select = [21] 
 
 #Early stop settings
 maxepoch = 10
@@ -68,7 +68,7 @@ use_gputil = False
 cuda_device = None
 
 
-# In[3]:
+# In[4]:
 
 #CUDA
 
@@ -89,12 +89,12 @@ if use_gputil and torch.cuda.is_available():
     
 
 
-# In[4]:
+# In[5]:
 
 #torch.cuda.is_available()
 
 
-# In[5]:
+# In[6]:
 
 #Seeds
 def setSeeds(seed):
@@ -105,7 +105,7 @@ def setSeeds(seed):
 setSeeds(0)
 
 
-# In[6]:
+# In[7]:
 
 #Prints header of beautifultable report for each fold
 def header(model_list,nmodel,nfold,traindataset,testdataset):
@@ -119,7 +119,7 @@ def header(model_list,nmodel,nfold,traindataset,testdataset):
     print('Testset fold'+str(i)+' shape: '+str(shape[0])+'x'+str((shape[1]+1))+'\n')
 
 
-# In[7]:
+# In[8]:
 
 #Prints actual beautifultable for each fold
 def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_dev):
@@ -133,7 +133,7 @@ def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_d
     print(table)
 
 
-# In[8]:
+# In[9]:
 
 #Saves best model state on disk for each fold
 def save_checkpoint (state, is_best, filename, logfile):
@@ -148,7 +148,7 @@ def save_checkpoint (state, is_best, filename, logfile):
         logfile.write(msg + "\n")
 
 
-# In[9]:
+# In[10]:
 
 #Compute sklearn metrics: Recall, Precision, F1-score
 def pre_rec (loader, model):
@@ -168,7 +168,7 @@ def pre_rec (loader, model):
     return round(precision,3), round(recall,3), round(f1_score,3)
 
 
-# In[10]:
+# In[11]:
 
 #Calculates model accuracy. Predicted vs Correct.
 def accuracy (loader, model):
@@ -185,7 +185,7 @@ def accuracy (loader, model):
     return round((100 * correct / total),3)
 
 
-# In[11]:
+# In[12]:
 
 #Arrays to store metrics
 accs = np.empty([nfold,1])
@@ -215,7 +215,7 @@ def stds (accs,precs,recs,f1,accs_dev):
     return a,p,r,f,a_d
 
 
-# In[12]:
+# In[13]:
 
 #Shuffle
 def dev_shuffle (shuffle_train,shuffle_test,val_split,traindataset,testdataset):
@@ -255,7 +255,7 @@ def data_split (shuffle_train,shuffle_test,val_split,test_val_split,traindataset
     return tr_sampler,d_sampler,tv_sampler,te_sampler
 
 
-# In[13]:
+# In[14]:
 
 '''
 test_val_split = 0.1
@@ -279,7 +279,7 @@ print("Dev: " + str(dev_indices))
 '''
 
 
-# In[14]:
+# In[15]:
 
 #Loads and appends all folds all at once
 trainfolds = []
@@ -288,7 +288,7 @@ cwd = os.getcwd()
 #l=pd.read_csv(cwd +'/list.csv',sep=',',header=None,dtype=np.int32)
 col_select = np.array([])
 
-
+#This is an hack to test smaller windows
 for i in range (spw*nmuscles,200):
     col_select = np.append(col_select,i)
     
@@ -326,12 +326,12 @@ print(len(traindata.columns))
 print(nmuscles)
 
 
-# In[15]:
+# In[16]:
 
 nmuscles=int((len(traindata.columns)-1)/spw) #used for layer dimensions and stride CNNs
 
 
-# In[16]:
+# In[17]:
 
 import models
 from models import *
@@ -343,18 +343,6 @@ models._batch_size = batch_size
 # In[18]:
 
 print(models._nmuscles)
-
-#import models
-#from models import *
-#TEST DIMENSIONS
-#models.nmuscles = nmuscles
-def testdimensions():
-    model = Model22()
-    print(model)
-    x = torch.randn(32,1,160)
-    model.test_dim(x)
- 
-testdimensions()
 
 
 # In[19]:
@@ -433,6 +421,7 @@ def train_test():
                                                                 sampler=test_sampler,drop_last=True)
                 modelClass = "Model" + str(k)
                 model = eval(modelClass)()
+                
                 
                 if (use_cuda):
                     model = model.cuda()
@@ -541,7 +530,7 @@ def train_test():
         
 
 
-# In[ ]:
+# In[20]:
 
 nmuscles=int((len(traindata.columns)-1)/spw)
 if use_cuda and not use_gputil and cuda_device!=None and torch.cuda.is_available():
