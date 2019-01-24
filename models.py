@@ -717,7 +717,7 @@ class Model20(nn.Module):
     
 class Model21(nn.Module):
     def __init__(self,**kwargs):
-        super(Model21,self).__init__()
+        super(Model22,self).__init__()
         self.FILTERS=[5*_nmuscles, 10*_nmuscles]
         conv_out_channels = 20
         self.convs = nn.ModuleList([nn.Conv1d(in_channels=1, out_channels=conv_out_channels, kernel_size=k_size, stride=_nmuscles) for k_size in self.FILTERS])
@@ -740,6 +740,53 @@ class Model21(nn.Module):
         #x = [self.mp(i) for i in x]   
         #for i in x:
             #print("Out: " + str(i.shape))
+        print("Do concat")    
+        x = torch.cat(x,2)
+        x = x.view(32,1,-1).squeeze()
+        print("Out: " + str(x.shape))
+
+        print("Do Fully connected 1")
+        x = self.fc1(x)
+        print("Out: " + str(x.shape))
+        print("Do Fully connected 2")
+        x = self.fc2(x)
+        print("Out: " + str(x.shape))
+        
+    def forward(self,x):
+        x = x.view(_batch_size,1,-1)
+        x = [F.relu(conv(x)) for conv in self.convs]
+        #x = [self.mp(i) for i in x]
+        x = torch.cat(x,2)
+        x = x.view(32,1,-1).squeeze()
+        x = F.relu(self.fc1(x))
+        return F.sigmoid(self.fc2(x))
+
+    
+class Model22(nn.Module):
+    def __init__(self,**kwargs):
+        super(Model22,self).__init__()
+        self.FILTERS=[3*_nmuscles, 5*_nmuscles, 10*_nmuscles]
+        conv_out_channels = 20
+        self.convs = nn.ModuleList([nn.Conv1d(in_channels=1, out_channels=conv_out_channels, kernel_size=k_size, stride=_nmuscles) for k_size in self.FILTERS])
+        #self.conv1 = nn.Conv1d(in_channels=1,out_channels=1,kernel_size=15,stride=5)
+        #self.mp = nn.AvgPool1d(3)
+        #self.dropout = nn.Dropout(0.5)
+        self.fc1 = nn.Linear(900,128)
+        self.fc2 = nn.Linear(128,1)
+
+    def test_dim(self,x):
+        for f in self.FILTERS:
+            print("Filter size: " + str(f))
+        print("Input:" + str(x.shape))
+        print("Features: " + str(_nmuscles))
+        print("Do convnets")
+        x = [F.relu(conv(x)) for conv in self.convs]
+        for out in x:
+            print("Out: " + str(out.shape))
+        #print("Do maxpool")
+        #x = [self.mp(i) for i in x]   
+        #for i in x:
+        #    print("Out: " + str(i.shape))
         print("Do concat")    
         x = torch.cat(x,2)
         x = x.view(32,1,-1).squeeze()
