@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[30]:
+# In[111]:
 
 ##Import libraries
 import torch
@@ -24,7 +24,7 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 
-# In[77]:
+# In[136]:
 
 ##SETTINGS
 doTrain = False
@@ -51,7 +51,7 @@ exclude_features=True
 #Only use electrogonio signals
 include_only_features=False
 #Features to selected/deselected for input to the networks
-features_select = [9,10] #1 to 4
+features_select = [] #1 to 4
 
 #Select which models to run. Insert comma separated values into 'model_select' var.
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
@@ -59,10 +59,10 @@ features_select = [9,10] #1 to 4
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d',
              'MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4', 'MultiConv1d_5', 
              'FF2', 'CNN1', 'FF3', 'FF4', 'CNN2', 'FF5', 'FF6', 'CNN3', 'CNN1-FF5', 'CNN1-2','CNN1-1']
-model_select = [11,12,13,14,16,17] 
+model_select = [12] 
 
 #Early stop settings
-maxepoch = 10
+maxepoch = 100
 maxpatience = 10
 
 use_cuda = False
@@ -70,7 +70,7 @@ use_gputil = False
 cuda_device = None
 
 
-# In[78]:
+# In[113]:
 
 #CUDA
 
@@ -91,12 +91,12 @@ if use_gputil and torch.cuda.is_available():
     
 
 
-# In[79]:
+# In[114]:
 
 #torch.cuda.is_available()
 
 
-# In[80]:
+# In[115]:
 
 #Seeds
 def setSeeds(seed):
@@ -107,7 +107,7 @@ def setSeeds(seed):
 setSeeds(0)
 
 
-# In[81]:
+# In[116]:
 
 #Prints header of beautifultable report for each fold
 def header(model_list,nmodel,nfold,traindataset,testdataset):
@@ -121,7 +121,7 @@ def header(model_list,nmodel,nfold,traindataset,testdataset):
     print('Testset fold'+str(i)+' shape: '+str(shape[0])+'x'+str((shape[1]+1))+'\n')
 
 
-# In[82]:
+# In[117]:
 
 #Prints actual beautifultable for each fold
 def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_dev):
@@ -135,7 +135,7 @@ def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_d
     print(table)
 
 
-# In[83]:
+# In[118]:
 
 #Saves best model state on disk for each fold
 def save_checkpoint (state, is_best, filename, logfile):
@@ -150,7 +150,7 @@ def save_checkpoint (state, is_best, filename, logfile):
         logfile.write(msg + "\n")
 
 
-# In[84]:
+# In[119]:
 
 #Compute sklearn metrics: Recall, Precision, F1-score
 def pre_rec (loader, model, positiveLabel):
@@ -170,7 +170,7 @@ def pre_rec (loader, model, positiveLabel):
     return round(precision*100,3), round(recall*100,3), round(f1_score*100,3)
 
 
-# In[85]:
+# In[120]:
 
 #Calculates model accuracy. Predicted vs Correct.
 def accuracy (loader, model):
@@ -187,7 +187,7 @@ def accuracy (loader, model):
     return round((100 * correct / total),3)
 
 
-# In[86]:
+# In[121]:
 
 #Arrays to store metrics
 accs = np.empty([nfold,1])
@@ -222,7 +222,7 @@ def stds (vals):
     return stds
 
 
-# In[87]:
+# In[122]:
 
 #Shuffle
 def dev_shuffle (shuffle_train,shuffle_test,val_split,traindataset,testdataset):
@@ -262,7 +262,7 @@ def data_split (shuffle_train,shuffle_test,val_split,test_val_split,traindataset
     return tr_sampler,d_sampler,tv_sampler,te_sampler
 
 
-# In[88]:
+# In[123]:
 
 '''
 test_val_split = 0.1
@@ -286,7 +286,7 @@ print("Dev: " + str(dev_indices))
 '''
 
 
-# In[15]:
+# In[124]:
 
 #Loads and appends all folds all at once
 trainfolds = []
@@ -333,12 +333,12 @@ print(len(traindata.columns))
 print(nmuscles)
 
 
-# In[89]:
+# In[137]:
 
 nmuscles=int((len(traindata.columns)-1)/spw) #used for layer dimensions and stride CNNs
 
 
-# In[90]:
+# In[138]:
 
 import models
 from models import *
@@ -347,7 +347,7 @@ models._nmuscles = nmuscles
 models._batch_size = batch_size
 
 
-# In[91]:
+# In[139]:
 
 print(models._nmuscles)
 
@@ -364,7 +364,7 @@ def testdimensions():
 #testdimensions()
 
 
-# In[92]:
+# In[140]:
 
 fieldnames = ['Fold','Acc_L', 'Acc_U',
               'R_0_U','R_1_U',
@@ -507,7 +507,8 @@ def train_test():
                         state = torch.load(os.path.join(folder,'F'+str(i)+'best.pth.tar'), map_location=lambda storage, loc: storage)
                     stop_epoch = state['epoch']
                     model.load_state_dict(state['state_dict'])
-                    model.cpu()
+                    if not use_cuda:
+                        model.cpu()
                     accuracy_dev = state['best_acc_dev']
                     model.eval()
                     acctest = (accuracy(test_loader, model))
@@ -616,7 +617,7 @@ def train_test():
         
 
 
-# In[93]:
+# In[141]:
 
 nmuscles=int((len(traindata.columns)-1)/spw)
 if use_cuda and not use_gputil and cuda_device!=None and torch.cuda.is_available():
