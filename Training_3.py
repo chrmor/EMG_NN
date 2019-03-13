@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[111]:
+# In[39]:
 
 ##Import libraries
 import torch
@@ -24,34 +24,38 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 
 
-# In[136]:
+# In[233]:
 
 ##SETTINGS
-doTrain = False
+doTrain = True
 doEval = True
 
 nfold = 10 #number of folds to train
 fold_offset = 1
-lr=0.1 #learning rate
+lr=0.01 #learning rate
 
 batch_size = 32
 val_split = .1 #trainset percentage allocated for devset
 test_val_split = .1 #trainset percentage allocated for test_val set (i.e. the test set of known patients)
 
+#cwd = os.getcwd()
+cwd = "../All_csv_subjects/Biphase_subjects/min-max/windows_60/tr-False_sliding_20_c-True/folds/subject1"
+prefix_train = 'TrainFold'
+prefix_test = 'TestFold'
 
-spw=20 #samples per window
+spw=60 #samples per window
 nmuscles=10 #initial number of muscles acquired
 
 #Enable/Disable shuffle on trainset/testset
-shuffle_train = True 
-shuffle_test= True
+shuffle_train = False 
+shuffle_test= False
 
 #Delete electrogonio signals
 exclude_features=True
 #Only use electrogonio signals
 include_only_features=False
 #Features to selected/deselected for input to the networks
-features_select = [] #1 to 4
+features_select = [9,10] #1 to 4
 
 #Select which models to run. Insert comma separated values into 'model_select' var.
 #List. 0:'FF', 1:'FC2', 2:'FC2DP', 3:'FC3', 4:'FC3dp', 5:'Conv1d', 6:'MultiConv1d' 
@@ -59,7 +63,7 @@ features_select = [] #1 to 4
 model_lst = ['FF','FC2','FC2DP','FC3','FC3dp','Conv1d','MultiConv1d',
              'MultiConv1d_2','MultiConv1d_3', 'MultiConv1d_4', 'MultiConv1d_5', 
              'FF2', 'CNN1', 'FF3', 'FF4', 'CNN2', 'FF5', 'FF6', 'CNN3', 'CNN1-FF5', 'CNN1-2','CNN1-1']
-model_select = [12] 
+model_select = [11]
 
 #Early stop settings
 maxepoch = 100
@@ -70,7 +74,7 @@ use_gputil = False
 cuda_device = None
 
 
-# In[113]:
+# In[234]:
 
 #CUDA
 
@@ -91,12 +95,12 @@ if use_gputil and torch.cuda.is_available():
     
 
 
-# In[114]:
+# In[235]:
 
 #torch.cuda.is_available()
 
 
-# In[115]:
+# In[236]:
 
 #Seeds
 def setSeeds(seed):
@@ -107,7 +111,7 @@ def setSeeds(seed):
 setSeeds(0)
 
 
-# In[116]:
+# In[237]:
 
 #Prints header of beautifultable report for each fold
 def header(model_list,nmodel,nfold,traindataset,testdataset):
@@ -121,7 +125,7 @@ def header(model_list,nmodel,nfold,traindataset,testdataset):
     print('Testset fold'+str(i)+' shape: '+str(shape[0])+'x'+str((shape[1]+1))+'\n')
 
 
-# In[117]:
+# In[238]:
 
 #Prints actual beautifultable for each fold
 def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_dev):
@@ -135,7 +139,7 @@ def table(model_list,nmodel,accuracies,precisions,recalls,f1_scores,accuracies_d
     print(table)
 
 
-# In[118]:
+# In[239]:
 
 #Saves best model state on disk for each fold
 def save_checkpoint (state, is_best, filename, logfile):
@@ -150,7 +154,7 @@ def save_checkpoint (state, is_best, filename, logfile):
         logfile.write(msg + "\n")
 
 
-# In[119]:
+# In[240]:
 
 #Compute sklearn metrics: Recall, Precision, F1-score
 def pre_rec (loader, model, positiveLabel):
@@ -170,7 +174,7 @@ def pre_rec (loader, model, positiveLabel):
     return round(precision*100,3), round(recall*100,3), round(f1_score*100,3)
 
 
-# In[120]:
+# In[241]:
 
 #Calculates model accuracy. Predicted vs Correct.
 def accuracy (loader, model):
@@ -187,7 +191,7 @@ def accuracy (loader, model):
     return round((100 * correct / total),3)
 
 
-# In[121]:
+# In[242]:
 
 #Arrays to store metrics
 accs = np.empty([nfold,1])
@@ -222,7 +226,7 @@ def stds (vals):
     return stds
 
 
-# In[122]:
+# In[243]:
 
 #Shuffle
 def dev_shuffle (shuffle_train,shuffle_test,val_split,traindataset,testdataset):
@@ -262,7 +266,7 @@ def data_split (shuffle_train,shuffle_test,val_split,test_val_split,traindataset
     return tr_sampler,d_sampler,tv_sampler,te_sampler
 
 
-# In[123]:
+# In[244]:
 
 '''
 test_val_split = 0.1
@@ -286,12 +290,12 @@ print("Dev: " + str(dev_indices))
 '''
 
 
-# In[124]:
+# In[246]:
 
 #Loads and appends all folds all at once
 trainfolds = []
 testfolds = []
-cwd = os.getcwd()
+
 #l=pd.read_csv(cwd +'/list.csv',sep=',',header=None,dtype=np.int32)
 col_select = np.array([])
 
@@ -302,27 +306,27 @@ for i in range (spw*nmuscles,200):
 for i in range (0,spw*nmuscles,nmuscles):
     for muscle in features_select:
         col_select = np.append(col_select,muscle -1 + i)
-    cols=np.arange(0,201)
+    cols=np.arange(0,spw*nmuscles+1)
 
 if exclude_features & (not include_only_features): #delete gonio
     for j in range(fold_offset,fold_offset + nfold):
         print("Loading fold " + str(j))
-        traindata = pd.read_table(os.path.join(cwd,'TrainFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32,usecols=[i for i in cols if i not in col_select.astype(int)])
-        testdata = pd.read_table(os.path.join(cwd,'TestFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32, usecols=[i for i in cols if i not in col_select.astype(int)])
+        traindata = pd.read_table(os.path.join(cwd, prefix_train + str(j)+'.csv'),sep=',',header=None,dtype=np.float32,usecols=[i for i in cols if i not in col_select.astype(int)])
         trainfolds.append(traindata)
+        testdata = pd.read_table(os.path.join(cwd, prefix_test + str(j)+'.csv'),sep=',',header=None,dtype=np.float32, usecols=[i for i in cols if i not in col_select.astype(int)])
         testfolds.append(testdata) 
 elif include_only_features & (not exclude_features): #only gonio
     for j in range(fold_offset, fold_offset + nfold):
         print("Loading fold " + str(j))
-        traindata = pd.read_table(os.path.join(cwd,'TrainFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32,usecols=[i for i in cols if i in col_select.astype(int)])
-        testdata = pd.read_table(os.path.join(cwd,'TestFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32, usecols=[i for i in cols if i in col_select.astype(int)])
+        traindata = pd.read_table(os.path.join(cwd, prefix_train + str(j)+'.csv'),sep=',',header=None,dtype=np.float32,usecols=[i for i in cols if i in col_select.astype(int)])
+        testdata = pd.read_table(os.path.join(cwd, prefix_test + str(j)+'.csv'),sep=',',header=None,dtype=np.float32, usecols=[i for i in cols if i in col_select.astype(int)])
         trainfolds.append(traindata)
         testfolds.append(testdata) 
 elif (not include_only_features) & (not exclude_features): 
     for j in range(fold_offset,fold_offset + nfold):
         print("Loading fold " + str(j))
-        traindata = pd.read_csv(os.path.join(cwd,'TrainFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32)
-        testdata = pd.read_csv(os.path.join(cwd,'TestFold'+str(j)+'.csv'),sep=',',header=None,dtype=np.float32)
+        traindata = pd.read_csv(os.path.join(cwd, prefix_train + str(j)+'.csv'),sep=',',header=None,dtype=np.float32)
+        testdata = pd.read_csv(os.path.join(cwd, prefix_test + str(j)+'.csv'),sep=',',header=None,dtype=np.float32)
         trainfolds.append(traindata)
         testfolds.append(testdata)
 else:
@@ -333,12 +337,12 @@ print(len(traindata.columns))
 print(nmuscles)
 
 
-# In[137]:
+# In[247]:
 
 nmuscles=int((len(traindata.columns)-1)/spw) #used for layer dimensions and stride CNNs
 
 
-# In[138]:
+# In[248]:
 
 import models
 from models import *
@@ -347,7 +351,7 @@ models._nmuscles = nmuscles
 models._batch_size = batch_size
 
 
-# In[139]:
+# In[249]:
 
 print(models._nmuscles)
 
@@ -364,7 +368,7 @@ def testdimensions():
 #testdimensions()
 
 
-# In[140]:
+# In[250]:
 
 fieldnames = ['Fold','Acc_L', 'Acc_U',
               'R_0_U','R_1_U',
@@ -617,7 +621,7 @@ def train_test():
         
 
 
-# In[141]:
+# In[251]:
 
 nmuscles=int((len(traindata.columns)-1)/spw)
 if use_cuda and not use_gputil and cuda_device!=None and torch.cuda.is_available():
@@ -625,11 +629,6 @@ if use_cuda and not use_gputil and cuda_device!=None and torch.cuda.is_available
         train_test()
 else:
     train_test()
-
-
-# In[ ]:
-
-
 
 
 # In[ ]:
